@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS todos(
+    id SERIAL NOT NULL PRIMARY KEY,
+    name VARCHAR NOT NULL,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);

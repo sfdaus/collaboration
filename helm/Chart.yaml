@@ -1,0 +1,12 @@
+apiVersion: v2
+name: collaboration
+description: Helm chart for deploying Prakarsa Collaboration Service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Prakarsa Team
+    email: prakarsaapp@gmail.com
+keywords:
+  - prakarsa
+  - collaboration
