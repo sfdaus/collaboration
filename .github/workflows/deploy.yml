@@ -1,0 +1,105 @@
+name: Deploy Notifications via Helm
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      NAMESPACE: prakarsa
+      RELEASE: collaboration
+      CHART_PATH: ./helm
+      IMAGE_REPO: ghcr.io/sfdaus/collaboration
+      IMAGE: ghcr.io/sfdaus/collaboration:${{ github.sha }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Build & Push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/sfdaus/collaboration:${{ github.sha }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create/Update GHCR imagePullSecret
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GHCR_PAT }} \
+            --namespace=prakarsa \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Prepare SSH key
+        run: |
+          echo "${{ secrets.SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Recreate Secret from server file
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          SSH="ssh -o StrictHostKeyChecking=no -i key.pem ${SSH_USER}@${SSH_HOST}"
+
+          # pastikan file env ada di server (format KEY=VALUE, meski namanya .yaml)
+          $SSH 'test -f /home/prakarsa/secrets/collaboration-env.yaml'
+
+          # buat Secret YAML di SERVER, lalu apply ke cluster dari SERVER
+          $SSH 'kubectl -n '"$NAMESPACE"' delete secret collaboration-env --ignore-not-found'
+          $SSH 'kubectl -n '"$NAMESPACE"' create secret generic collaboration-env \
+                --from-env-file=/home/prakarsa/secrets/collaboration-env.yaml \
+                --dry-run=client -o yaml | kubectl apply -f -'
+
+          # opsional: echo ringkas tanpa bocorkan value
+          echo "collaboration-env secret recreated from /home/prakarsa/secrets/collaboration-env.yaml"
+
+      - name: Deploy via Helm
+        run: |
+          kubectl cluster-info
+
+          helm upgrade --install $RELEASE $CHART_PATH \
+            --namespace $NAMESPACE \
+            --create-namespace \
+            --set image.repository="${IMAGE_REPO}" \
+            --set image.tag=${{ github.sha }} \
+            --set secretName="collaboration-env" \
+            --wait \
+            --timeout=300s
+
+      - name: Verify Rollout
+        run: |
+          kubectl -n $NAMESPACE rollout status deploy/${RELEASE}
+          kubectl -n $NAMESPACE get pods,svc,ingress -l app.kubernetes.io/name=${RELEASE} -o wide
+
+          echo "Deployment completed with SHA: ${{ github.sha }}"
