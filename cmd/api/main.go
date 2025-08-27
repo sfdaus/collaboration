@@ -7,18 +7,21 @@ import (
 	"os/signal"
 	"prakarsa-app/config"
 	"prakarsa-app/infrastructure/datastore"
+	"prakarsa-app/infrastructure/transport/clients"
+	"prakarsa-app/infrastructure/transport/httpclient"
 	"prakarsa-app/usecase"
 	"prakarsa-app/utils"
 	"prakarsa-app/utils/jwt"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-	echoSwagger "github.com/swaggo/echo-swagger"
 	httpDelivery "prakarsa-app/delivery/http"
 	appMiddleware "prakarsa-app/delivery/middleware"
 	pgsqlRepository "prakarsa-app/repository/pgsql"
 	redisRepository "prakarsa-app/repository/redis"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
 // @title Go Boilerplate
@@ -38,16 +41,22 @@ func main() {
 	cacheInstance, err := datastore.NewCache(configApp.CacheURL)
 	utils.PanicIfNeeded(err)
 
+	hcNotif := httpclient.New(
+		config.LoadConfig().BaseUrlAPI,
+		httpclient.WithDefaultHeader("Accept", "application/json"),
+	)
+
 	// Setup repository
 	redisRepo := redisRepository.NewRedisRepository(cacheInstance)
 	collaborationRepo := pgsqlRepository.NewPgsqlCollaborationRepository(dbInstance)
+	notif := clients.NewNotificationClient(hcNotif)
 
 	// Setup Service
 	jwtSvc := jwt.NewJWTService(configApp.JWTSecretKey)
 
 	// Setup usecase
 	ctxTimeout := time.Duration(configApp.ContextTimeout) * time.Second
-	collaborationUC := usecase.NewCollaborationUsecase(collaborationRepo, redisRepo, ctxTimeout)
+	collaborationUC := usecase.NewCollaborationUsecase(collaborationRepo, redisRepo, ctxTimeout, notif)
 
 	// Setup app middleware
 	appMiddleware := appMiddleware.NewMiddleware(jwtSvc)
