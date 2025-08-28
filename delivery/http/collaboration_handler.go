@@ -22,6 +22,8 @@ func NewCollaborationHandler(e *echo.Echo, middleware *middleware.Middleware, re
 
 	apiV1 := e.Group("/api/v1")
 	apiV1.POST("/collaborations/threads/:threadID/apply", handler.ThreadCollaborationApply)
+	// TODO : apiV1.POST("/collaborations/threads/:threadID/reject", handler.RejectThreadCollaboration)
+	// TODO : apiV1.POST("/collaborations/threads/:threadID/accept", handler.AcceptThreadCollaboration)
 }
 
 func (h *CollaborationHandler) ThreadCollaborationApply(c echo.Context) error {
