@@ -196,3 +196,20 @@ func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Con
 
 	return
 }
+
+func (r *pgsqlCollaborationRepository) RevertThreadCollaborationReject(ctx context.Context,
+	threadCollabApplicationPayload *entity.ThreadPartnerApplication, pendingStatus string) (err error) {
+	query := `UPDATE thread_partner_applications 
+		SET 
+		status = $1,
+		updated_at = $2,
+		updated_by = $3
+		WHERE id = $4 AND initiator_user_id = $5 AND is_active = true`
+	_, err = r.db.ExecContext(ctx, query, pendingStatus,
+		threadCollabApplicationPayload.UpdatedAt, threadCollabApplicationPayload.UpdatedBy,
+		threadCollabApplicationPayload.ID, threadCollabApplicationPayload.InitiatorUserID)
+	if err != nil {
+		return
+	}
+	return
+}
