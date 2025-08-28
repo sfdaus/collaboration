@@ -36,13 +36,13 @@ func (request RejectThreadCollaborationReq) Validate() error {
 	)
 }
 
-// Accept Thread Collaboration request body
-type AcceptThreadCollaborationReq struct {
+// Approve Thread Collaboration request body
+type ApproveThreadCollaborationReq struct {
 	ApplicationCollaborationID string `param:"applicationID"`
 	UserID                     string
 }
 
-func (request AcceptThreadCollaborationReq) Validate() error {
+func (request ApproveThreadCollaborationReq) Validate() error {
 	return validation.ValidateStruct(
 		&request,
 		validation.Field(&request.ApplicationCollaborationID, validation.Required),

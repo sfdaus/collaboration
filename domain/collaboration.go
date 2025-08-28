@@ -16,11 +16,16 @@ type CollaborationRepository interface {
 		pendingStatus string) (applicantID string, threadTitle string, err error)
 	RevertThreadCollaborationReject(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
 		pendingStatus string) (err error)
+	ApproveThreadCollaboration(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+		threadCollaborator *entity.ThreadCollaborator, pendingStatus string) (applicantID string,
+		threadTitle string, err error)
+	RevertThreadCollaborationApprove(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+		threadCollaborator *entity.ThreadCollaborator, pendingStatus string) (err error)
 }
 
 // CollaborationUsecase represent the collaboration usecase contract
 type CollaborationUsecase interface {
 	ThreadCollaborationApply(ctx context.Context, request *request.ThreadCollaborationApplyReq) (response.ThreadCollaborationApplyRes, error)
 	RejectThreadCollaboration(ctx context.Context, request *request.RejectThreadCollaborationReq) error
-	AcceptThreadCollaboration(ctx context.Context, request *request.AcceptThreadCollaborationReq) error
+	ApproveThreadCollaboration(ctx context.Context, request *request.ApproveThreadCollaborationReq) error
 }

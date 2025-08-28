@@ -158,21 +158,30 @@ func (u *CollaborationUsecase) RejectThreadCollaboration(c context.Context, requ
 	return
 }
 
-func (u *CollaborationUsecase) AcceptThreadCollaboration(c context.Context, request *request.RejectThreadCollaborationReq) (err error) {
+func (u *CollaborationUsecase) ApproveThreadCollaboration(c context.Context, request *request.ApproveThreadCollaborationReq) (err error) {
 	ctx, cancel := context.WithTimeout(c, u.ctxTimeout)
 	defer cancel()
 
 	threadCollabApplicationPayload := &entity.ThreadPartnerApplication{
 		ID:              request.ApplicationCollaborationID,
 		InitiatorUserID: request.UserID,
-		RejectReason:    request.Message,
-		Status:          utils.REJECTED_APPLICATION_STATUS,
+		Status:          utils.ACCEPTED_APPLICATION_STATUS,
 		UpdatedAt:       time.Now().Unix(),
 		UpdatedBy:       request.UserID,
 	}
 
-	applicantID, threadTitle, err := u.collaborationRepo.RejectThreadCollaboration(ctx, threadCollabApplicationPayload,
-		utils.PENDING_APPLICATION_STATUS)
+	threadCollaboratorPayload := &entity.ThreadCollaborator{
+		ID:        uuid.NewString(),
+		Status:    utils.ACTIVE_COLLABORATION_STATUS,
+		JoinedAt:  time.Now().Unix(),
+		IsActive:  true,
+		CreatedAt: time.Now().Unix(),
+		CreatedBy: request.UserID,
+		UpdatedAt: time.Now().Unix(),
+	}
+
+	applicantID, threadTitle, err := u.collaborationRepo.ApproveThreadCollaboration(ctx, threadCollabApplicationPayload,
+		threadCollaboratorPayload, utils.PENDING_APPLICATION_STATUS)
 	if err != nil {
 		return
 	}
@@ -191,14 +200,14 @@ func (u *CollaborationUsecase) AcceptThreadCollaboration(c context.Context, requ
 		ReferenceType: utils.THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE,
 		ReferenceID:   threadCollabApplicationPayload.ID,
 		Title:         newTitle,
-		Message:       request.Message,
 		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_APPLICATION_REJECT_NOTIFICATION],
 		Headers:       map[string]string{"x-user-id": request.UserID},
 	}
 	err = u.notifClient.SendNotification(c, initNotifPayload)
 
 	if err != nil {
-		err = u.collaborationRepo.RevertThreadCollaborationApply(ctx, threadCollabApplicationPayload)
+		err = u.collaborationRepo.RevertThreadCollaborationApprove(ctx, threadCollabApplicationPayload,
+			threadCollaboratorPayload, utils.PENDING_APPLICATION_STATUS)
 		if err != nil {
 			return
 		}

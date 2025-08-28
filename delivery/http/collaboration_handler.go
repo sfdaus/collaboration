@@ -24,7 +24,7 @@ func NewCollaborationHandler(e *echo.Echo, middleware *middleware.Middleware, re
 	apiV1 := e.Group("/api/v1")
 	apiV1.POST("/collaborations/threads/:threadID/apply", handler.ThreadCollaborationApply)
 	apiV1.POST("/collaborations/threads/:applicationID/reject", handler.RejectThreadCollaboration)
-	apiV1.POST("/collaborations/threads/:applicationID/accept", handler.AcceptThreadCollaboration)
+	apiV1.POST("/collaborations/threads/:applicationID/approve", handler.ApproveThreadCollaboration)
 }
 
 func (h *CollaborationHandler) ThreadCollaborationApply(c echo.Context) error {
@@ -76,9 +76,9 @@ func (h *CollaborationHandler) RejectThreadCollaboration(c echo.Context) error {
 	}
 }
 
-func (h *CollaborationHandler) AcceptThreadCollaboration(c echo.Context) error {
+func (h *CollaborationHandler) ApproveThreadCollaboration(c echo.Context) error {
 	ctx := c.Request().Context()
-	var req request.AcceptThreadCollaborationReq
+	var req request.ApproveThreadCollaborationReq
 
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, utils.NewUnprocessableEntityError(err.Error()))
@@ -91,11 +91,11 @@ func (h *CollaborationHandler) AcceptThreadCollaboration(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, utils.NewInvalidInputError(errVal))
 	}
 
-	if err := h.CollaborationUC.AcceptThreadCollaboration(ctx, &req); err != nil {
-		return c.JSON(utils.ParseHttpErrorToBasicResponse(err, "Accept thread collaboration failed"))
+	if err := h.CollaborationUC.ApproveThreadCollaboration(ctx, &req); err != nil {
+		return c.JSON(utils.ParseHttpErrorToBasicResponse(err, "Approve thread collaboration failed"))
 	} else {
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"message": "Accept thread application success",
+			"message": "Approve thread application success",
 		})
 	}
 }
