@@ -22,7 +22,7 @@ func NewPgsqlCollaborationRepository(db *sql.DB) *pgsqlCollaborationRepository {
 }
 
 func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Context,
-	threadCollabApplicationPayload *entity.ThreadPartnerApplication) (res response.ThreadCollaborationApplyRes, err error) {
+	threadCollabApplicationPayload *entity.ThreadPartnerApplication) (res response.ThreadCollaborationApplyRes, initID string, err error) {
 	// Mulai transaction
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -37,32 +37,32 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 	}()
 
 	// 1) Ambil owner thread & status aktif
-	var ownerID string
+	var title string
 	var threadActive bool
 
-	qThread := `SELECT t.user_id AS owner_id, t.is_active
+	qThread := `SELECT t.title, t.user_id AS owner_id, t.is_active
 				  FROM threads t
 				  WHERE t.id = $1
 				  FOR SHARE`
 
 	if err = tx.QueryRowContext(ctx, qThread, threadCollabApplicationPayload.ThreadID).
-		Scan(&ownerID, &threadActive); err != nil {
+		Scan(&title, &initID, &threadActive); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return res, utils.NewNotFoundError("Thread or Role not found")
+			return res, initID, utils.NewNotFoundError("Thread or Role not found")
 		}
 		return
 	}
 
 	if !threadActive {
-		return res, utils.NewNotFoundError("Thread is not active")
+		return res, initID, utils.NewNotFoundError("Thread is not active")
 	}
 
-	if ownerID == threadCollabApplicationPayload.ApplicantUserID {
-		return res, utils.NewForbiddenError("Cannot apply to your own thread")
+	if initID == threadCollabApplicationPayload.ApplicantUserID {
+		return res, initID, utils.NewForbiddenError("Cannot apply to your own thread")
 	}
 
-	// Add owner id to initiator id
-	threadCollabApplicationPayload.InitiatorUserID = ownerID
+	// Add initiator id
+	threadCollabApplicationPayload.InitiatorUserID = initID
 
 	// 2) Validasi role milik thread + cek kapasitas saat apply
 	var needed, fulfilled *int
@@ -77,16 +77,16 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 	if err = tx.QueryRowContext(ctx, qRole, threadCollabApplicationPayload.ThreadPartnerTypeID,
 		threadCollabApplicationPayload.ThreadID).Scan(&needed, &fulfilled, &roleID, &roleName); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return res, utils.NewNotFoundError("Role isn't available on this thread")
+			return res, initID, utils.NewNotFoundError("Role isn't available on this thread")
 		}
 		return
 	}
 
 	// Blokir application saat penuh
 	if needed == nil {
-		return res, utils.NewBadRequestError("Capacity for this role is full")
+		return res, initID, utils.NewBadRequestError("Capacity for this role is full")
 	} else if fulfilled != nil && *fulfilled >= *needed {
-		return res, utils.NewBadRequestError("Capacity for this role is full")
+		return res, initID, utils.NewBadRequestError("Capacity for this role is full")
 	}
 
 	// 3) Insert thread application
@@ -102,7 +102,7 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 
 		var pqe *pq.Error
 		if errors.As(err, &pqe) && pqe.Constraint == "uniq_active_application_per_role" {
-			return res, utils.NewForbiddenError("You cannot apply to the same role twice")
+			return res, initID, utils.NewForbiddenError("You cannot apply to the same role twice")
 		}
 		return
 	}
@@ -112,11 +112,12 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 	}
 
 	res = response.ThreadCollaborationApplyRes{
-		ID:       threadCollabApplicationPayload.ID,
-		ThreadID: threadCollabApplicationPayload.ThreadID,
-		RoleID:   roleID,
-		RoleName: roleName,
-		Status:   threadCollabApplicationPayload.Status,
+		ID:         threadCollabApplicationPayload.ID,
+		ThreadID:   threadCollabApplicationPayload.ThreadID,
+		ThreadName: title,
+		RoleID:     roleID,
+		RoleName:   roleName,
+		Status:     threadCollabApplicationPayload.Status,
 	}
 
 	return

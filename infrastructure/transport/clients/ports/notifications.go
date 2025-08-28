@@ -11,9 +11,10 @@ type CreateNotification struct {
 	Type          string
 	ReferenceType string
 	ReferenceID   string
-	SourceUserID  string
 	Title         string
 	Message       string
 	ActionUrl     string
 	Priority      string
+
+	Headers map[string]string
 }
