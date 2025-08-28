@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/lib/pq"
 	"prakarsa-app/entity"
 	"prakarsa-app/transport/response"
 	"prakarsa-app/utils"
+
+	"github.com/lib/pq"
 )
 
 type pgsqlCollaborationRepository struct {
@@ -127,5 +128,71 @@ func (r *pgsqlCollaborationRepository) RevertThreadCollaborationApply(ctx contex
 	threadCollabApplicationPayload *entity.ThreadPartnerApplication) (err error) {
 	query := "DELETE FROM thread_partner_applications WHERE id = $1"
 	_, err = r.db.ExecContext(ctx, query, threadCollabApplicationPayload.ID)
+	return
+}
+
+func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Context,
+	threadCollabApplicationPayload *entity.ThreadPartnerApplication, pendingStatus string) (applicantID string, threadTitle string, err error) {
+	// Mulai transaction
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	// Pastikan rollback kalau ada error
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Ambil applicant_id
+	var threadID string
+	qThreadApp := `SELECT applicant_user_id, thread_id
+				  FROM thread_partner_applications
+				  WHERE id = $1 AND status = $2
+				  FOR SHARE`
+
+	if err = tx.QueryRowContext(ctx, qThreadApp, threadCollabApplicationPayload.ID, pendingStatus).
+		Scan(&applicantID, &threadID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return applicantID, threadTitle, utils.NewNotFoundError("Thread collaboration application not found")
+		}
+		return
+	}
+
+	// Ambil thread title
+	qThread := `SELECT title
+				  FROM threads
+				  WHERE id = $1
+				  FOR SHARE`
+
+	if err = tx.QueryRowContext(ctx, qThread, threadID).
+		Scan(&threadTitle); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return applicantID, threadTitle, utils.NewNotFoundError("Thread not found")
+		}
+		return
+	}
+
+	// Update rejected
+	query := `UPDATE thread_partner_applications 
+				SET 
+				status = $1,
+				reject_reason = $2,
+				updated_at = $3,
+				updated_by = $4
+				WHERE id = $5 AND initiator_user_id = $6 AND is_active = true`
+	_, err = tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.RejectReason,
+		threadCollabApplicationPayload.UpdatedAt, threadCollabApplicationPayload.UpdatedBy,
+		threadCollabApplicationPayload.ID, threadCollabApplicationPayload.InitiatorUserID)
+	if err != nil {
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		return
+	}
+
 	return
 }
