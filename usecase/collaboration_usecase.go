@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"prakarsa-app/entity"
 	"prakarsa-app/infrastructure/transport/clients/ports"
 	"prakarsa-app/transport/response"
@@ -61,6 +62,30 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 	/*
 		Send Notifications
 	*/
+	// Initiator Notification
+	appTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["THREAD_APPLICATION_TITLE"], "<role>", res.RoleName, 1)
+	appTitle = strings.Replace(appTitle, "<thread_title>", `"`+res.ThreadName, 1)
+
+	initNotifPayload := ports.CreateNotification{
+		UserID:        initID,
+		Type:          utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE,
+		ReferenceType: utils.THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE,
+		ReferenceID:   threadCollabApplicationPayload.ID,
+		Title:         appTitle,
+		Message:       request.Message,
+		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE],
+		Headers:       map[string]string{"x-user-id": request.UserID},
+	}
+	err = u.notifClient.SendNotification(c, initNotifPayload)
+	
+	if err != nil {
+		err = u.collaborationRepo.RevertThreadCollaborationApply(ctx, threadCollabApplicationPayload)
+		if err != nil {
+			return
+		}
+
+		return res, utils.NewInternalServerError(fmt.Errorf("There was an error sending notification to author"))
+	}
 
 	// Self Notification
 	selfTitle := strings.Replace(utils.CollaborationSelfNotificationTitle["THREAD_APPLICATION_TITLE"], "<role>", res.RoleName, 1)
@@ -77,22 +102,6 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 		Headers:       map[string]string{"x-user-id": request.UserID},
 	}
 	err = u.notifClient.SendNotification(c, selfNotifPayload)
-	
-	// Initiator Notification
-	appTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["THREAD_APPLICATION_TITLE"], "<role>", res.RoleName, 1)
-	appTitle = strings.Replace(appTitle, "<thread_title>", `"`+res.ThreadName, 1)
-
-	initNotifPayload := ports.CreateNotification{
-		UserID:        initID,
-		Type:          utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE,
-		ReferenceType: utils.THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE,
-		ReferenceID:   threadCollabApplicationPayload.ID,
-		Title:         appTitle,
-		Message:       request.Message,
-		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE],
-		Headers:       map[string]string{"x-user-id": request.UserID},
-	}
-	err = u.notifClient.SendNotification(c, initNotifPayload)
 
 	return
 }

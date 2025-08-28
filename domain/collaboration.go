@@ -11,6 +11,7 @@ import (
 type CollaborationRepository interface {
 	ThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication) (res response.ThreadCollaborationApplyRes,
 		initID string, err error)
+	RevertThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication) (err error)
 }
 
 // CollaborationUsecase represent the collaboration usecase contract

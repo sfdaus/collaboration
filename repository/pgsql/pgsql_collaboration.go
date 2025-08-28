@@ -122,3 +122,10 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 
 	return
 }
+
+func (r *pgsqlCollaborationRepository) RevertThreadCollaborationApply(ctx context.Context,
+	threadCollabApplicationPayload *entity.ThreadPartnerApplication) (err error) {
+	query := "DELETE FROM thread_partner_applications WHERE id = $1"
+	_, err = r.db.ExecContext(ctx, query, threadCollabApplicationPayload.ID)
+	return
+}
