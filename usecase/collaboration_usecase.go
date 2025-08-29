@@ -180,7 +180,7 @@ func (u *CollaborationUsecase) ApproveThreadCollaboration(c context.Context, req
 		UpdatedAt: time.Now().Unix(),
 	}
 
-	applicantID, threadTitle, err := u.collaborationRepo.ApproveThreadCollaboration(ctx, threadCollabApplicationPayload,
+	applicantID, threadTitle, partnerTypeID, err := u.collaborationRepo.ApproveThreadCollaboration(ctx, threadCollabApplicationPayload,
 		threadCollaboratorPayload, utils.PENDING_APPLICATION_STATUS)
 	if err != nil {
 		return
@@ -191,23 +191,24 @@ func (u *CollaborationUsecase) ApproveThreadCollaboration(c context.Context, req
 	*/
 
 	// Applicant notification
-	newTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["APPLICATION_REJECTED_TITLE"],
+	newTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["APPLICATION_APPROVED_TITLE"],
 		"<thread_title>", threadTitle, 1)
 
 	initNotifPayload := ports.CreateNotification{
 		UserID:        applicantID,
-		Type:          utils.THREAD_APPLICATION_REJECT_NOTIFICATION,
+		Type:          utils.THREAD_APPLICATION_APPROVE_NOTIFICATION,
 		ReferenceType: utils.THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE,
 		ReferenceID:   threadCollabApplicationPayload.ID,
 		Title:         newTitle,
-		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_APPLICATION_REJECT_NOTIFICATION],
+		Message:       utils.CollaborationInitiatorNotificationMessage["THREAD_APPLICATION_MESSAGE"],
+		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_APPLICATION_APPROVE_NOTIFICATION],
 		Headers:       map[string]string{"x-user-id": request.UserID},
 	}
 	err = u.notifClient.SendNotification(c, initNotifPayload)
 
 	if err != nil {
 		err = u.collaborationRepo.RevertThreadCollaborationApprove(ctx, threadCollabApplicationPayload,
-			threadCollaboratorPayload, utils.PENDING_APPLICATION_STATUS)
+			threadCollaboratorPayload, utils.PENDING_APPLICATION_STATUS, partnerTypeID)
 		if err != nil {
 			return
 		}

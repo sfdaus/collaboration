@@ -150,10 +150,10 @@ func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Con
 	var threadID string
 	qThreadApp := `SELECT applicant_user_id, thread_id
 				  FROM thread_partner_applications
-				  WHERE id = $1 AND status = $2 AND is_active = true
+				  WHERE id = $1 AND status = $2 AND initiator_user_id = $3 AND is_active = true
 				  FOR SHARE`
 
-	if err = tx.QueryRowContext(ctx, qThreadApp, threadCollabApplicationPayload.ID, pendingStatus).
+	if err = tx.QueryRowContext(ctx, qThreadApp, threadCollabApplicationPayload.ID, pendingStatus, threadCollabApplicationPayload.InitiatorUserID).
 		Scan(&applicantID, &threadID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return applicantID, threadTitle, utils.NewNotFoundError("Thread collaboration application not found")
@@ -219,7 +219,7 @@ func (r *pgsqlCollaborationRepository) RevertThreadCollaborationReject(ctx conte
 
 func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Context,
 	threadCollabApplicationPayload *entity.ThreadPartnerApplication, threadCollaborator *entity.ThreadCollaborator,
-	pendingStatus string) (applicantID string, threadTitle string, err error) {
+	pendingStatus string) (applicantID string, threadTitle string, partnerTypeID string, err error) {
 
 	// Mulai transaction
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -235,16 +235,16 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 	}()
 
 	// Ambil applicant_id
-	var threadID, partnerTypeID string
+	var threadID string
 	qThreadApp := `SELECT applicant_user_id, thread_id, thread_partner_type_id
 				  FROM thread_partner_applications
-				  WHERE id = $1 AND status = $2 AND is_active = true
+				  WHERE id = $1 AND status = $2 AND initiator_user_id = $3 AND is_active = true
 				  FOR SHARE`
 
-	if err = tx.QueryRowContext(ctx, qThreadApp, threadCollabApplicationPayload.ID, pendingStatus).
+	if err = tx.QueryRowContext(ctx, qThreadApp, threadCollabApplicationPayload.ID, pendingStatus, threadCollabApplicationPayload.InitiatorUserID).
 		Scan(&applicantID, &threadID, &partnerTypeID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return applicantID, threadTitle, utils.NewNotFoundError("Thread collaboration application not found")
+			return applicantID, threadTitle, partnerTypeID, utils.NewNotFoundError("Thread collaboration application not found")
 		}
 		return
 	}
@@ -277,25 +277,27 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 	if err = tx.QueryRowContext(ctx, qThread, threadID).
 		Scan(&threadTitle); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return applicantID, threadTitle, utils.NewNotFoundError("Thread not found")
+			return applicantID, threadTitle, partnerTypeID, utils.NewNotFoundError("Thread not found")
 		}
 		return
 	}
 
-	// Update approved
-	query := `UPDATE thread_partner_applications 
-				SET 
-				status = $1,
-				updated_at = $2,
-				updated_by = $3
-				WHERE id = $4 AND initiator_user_id = $5 AND is_active = true`
-	_, err = tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status,
-		threadCollabApplicationPayload.UpdatedAt, threadCollabApplicationPayload.UpdatedBy,
-		threadCollabApplicationPayload.ID, threadCollabApplicationPayload.InitiatorUserID)
+	// Update application status + cek RowsAffected()
+	query := `UPDATE thread_partner_applications
+				SET status = $1,
+					updated_at = $2,
+					updated_by = $3
+				WHERE id = $4 AND initiator_user_id = $5 AND status = $6 AND is_active = true`
+
+	res, err := tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
+		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.ID, threadCollabApplicationPayload.InitiatorUserID, pendingStatus)
+
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return applicantID, threadTitle, utils.NewNotFoundError("Application not found")
-		}
+		return
+	}
+
+	if n, _ := res.RowsAffected(); n == 0 {
+		err = utils.NewNotFoundError("Application not found or already processed")
 		return
 	}
 
@@ -328,17 +330,53 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 }
 
 func (r *pgsqlCollaborationRepository) RevertThreadCollaborationApprove(ctx context.Context,
-	threadCollabApplicationPayload *entity.ThreadPartnerApplication, pendingStatus string) (err error) {
+	threadCollabApplicationPayload *entity.ThreadPartnerApplication, threadCollaborator *entity.ThreadCollaborator, pendingStatus, partnerTypeID string) (err error) {
+	// Mulai transaction
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	// Pastikan rollback kalau ada error
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Update approved
 	query := `UPDATE thread_partner_applications 
-		SET 
-		status = $1,
-		updated_at = $2,
-		updated_by = $3
-		WHERE id = $4 AND initiator_user_id = $5 AND is_active = true`
-	_, err = r.db.ExecContext(ctx, query, pendingStatus,
-		threadCollabApplicationPayload.UpdatedAt, threadCollabApplicationPayload.UpdatedBy,
+				SET 
+				status = $1,
+				updated_at = $2
+				WHERE id = $3 AND initiator_user_id = $4 AND is_active = true`
+	_, err = tx.ExecContext(ctx, query, pendingStatus, threadCollabApplicationPayload.UpdatedAt,
 		threadCollabApplicationPayload.ID, threadCollabApplicationPayload.InitiatorUserID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return utils.NewNotFoundError("Revert : Application not found")
+		}
+		return
+	}
+
+	// Revert thread collaborator
+	query = `DELETE FROM thread_collaborators
+				WHERE id = $1`
+	_, err = tx.ExecContext(ctx, query, threadCollaborator.ID)
+	if err != nil {
+		return
+	}
+
+	// Revert amount fulfilled
+	qPartnerType := `UPDATE thread_partner_types
+					SET amount_fulfilled = amount_fulfilled - 1
+					WHERE id = $1 AND is_active = true`
+
+	if _, err = tx.ExecContext(ctx, qPartnerType, partnerTypeID); err != nil {
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
 		return
 	}
 	return

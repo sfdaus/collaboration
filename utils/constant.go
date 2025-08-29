@@ -37,6 +37,11 @@ var Status = ResponseStatus{
 var CollaborationInitiatorNotificationTitle = map[string]string{
 	"THREAD_APPLICATION_TITLE":   `tertarik dengan role <role> untuk proyek "<thread_title>"`,
 	"APPLICATION_REJECTED_TITLE": `menolak ajakan kolaborasi kamu untuk proyek "<thread_title>"`,
+	"APPLICATION_APPROVED_TITLE": `menerima ajakan kolaborasi kamu untuk proyek "<thread_title>"`,
+}
+
+var CollaborationInitiatorNotificationMessage = map[string]string{
+	"THREAD_APPLICATION_MESSAGE": `Aplikasi yang kamu ajukan diterima!`,
 }
 
 var CollaborationSelfNotificationTitle = map[string]string{
