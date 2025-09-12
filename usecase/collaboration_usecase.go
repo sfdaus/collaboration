@@ -62,15 +62,12 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 	headers := map[string]string{"x-user-id": request.UserID}
 	headersJSON, _ := json.Marshal(headers)
 
-	appTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["THREAD_APPLICATION_TITLE"], "<role>", res.RoleName, 1)
-	appTitle = strings.Replace(appTitle, "<thread_title>", `"`+res.ThreadName, 1)
 	initiatorNotificationOutboxPayload = &entity.NotificationOutboxInsert{
 		ID:            uuid.NewString(),
 		Type:          utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE,
 		ReferenceType: utils.THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE,
 		ReferenceID:   threadCollabApplicationPayload.ID,
 		HeadersJSON:   headersJSON,
-		Title:         appTitle,
 		Message:       request.Message,
 		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE],
 		IdempotencyKey: fmt.Sprintf(
@@ -80,16 +77,13 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 		UpdatedAt: time.Now().Unix(),
 	}
 
-	selfTitle := strings.Replace(utils.CollaborationSelfNotificationTitle["THREAD_APPLICATION_TITLE"], "<role>", res.RoleName, 1)
-	selfTitle = strings.Replace(selfTitle, "<thread_title>", res.ThreadName, 1)
 	collabNotificationOutboxPayload = &entity.NotificationOutboxInsert{
 		ID:            uuid.NewString(),
 		UserID:        request.UserID,
 		Type:          utils.THREAD_SELF_APPLICATION_NOTIFICATION_TYPE,
 		ReferenceType: utils.THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE,
 		ReferenceID:   threadCollabApplicationPayload.ID,
-		Title:         appTitle,
-		Message:       request.Message,
+		Message:       "Aplikasimu berhasil dikirimkan ke author.",
 		HeadersJSON:   headersJSON,
 		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_SELF_APPLICATION_NOTIFICATION_TYPE],
 		IdempotencyKey: fmt.Sprintf(
