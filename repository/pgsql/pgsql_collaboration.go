@@ -109,10 +109,23 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 		}
 		return
 	}
-	
+
+	res = response.ThreadCollaborationApplyRes{
+		ID:         threadCollabApplicationPayload.ID,
+		ThreadID:   threadCollabApplicationPayload.ThreadID,
+		ThreadName: title,
+		RoleID:     roleID,
+		RoleName:   roleName,
+		Status:     threadCollabApplicationPayload.Status,
+	}
+
 	// Initiator Notification
 	initiatorNotificationOutbox.UserID = initID
 	initiatorNotificationOutbox.IdempotencyKey = strings.Replace(initiatorNotificationOutbox.IdempotencyKey, "[INIT_ID]", initID, 1)
+
+	appTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["THREAD_APPLICATION_TITLE"], "<role>", res.RoleName, 1)
+	appTitle = strings.Replace(appTitle, "<thread_title>", `"`+res.ThreadName, 1)
+	initiatorNotificationOutbox.Title = appTitle
 
 	qInitNotifOutbox := `
 						 INSERT INTO notification_outbox
@@ -133,6 +146,10 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 	}
 
 	// Collaborator Notification
+	selfTitle := strings.Replace(utils.CollaborationSelfNotificationTitle["THREAD_APPLICATION_TITLE"], "<role>", res.RoleName, 1)
+	selfTitle = strings.Replace(selfTitle, "<thread_title>", res.ThreadName, 1)
+	collabNotificationOutbox.Title = selfTitle
+
 	qCollabNotifOutbox := `
 						 INSERT INTO notification_outbox
 								(id, user_id, type, reference_type, reference_id, headers_json,
@@ -153,15 +170,6 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 
 	if err = tx.Commit(); err != nil {
 		return
-	}
-
-	res = response.ThreadCollaborationApplyRes{
-		ID:         threadCollabApplicationPayload.ID,
-		ThreadID:   threadCollabApplicationPayload.ThreadID,
-		ThreadName: title,
-		RoleID:     roleID,
-		RoleName:   roleName,
-		Status:     threadCollabApplicationPayload.Status,
 	}
 
 	return
