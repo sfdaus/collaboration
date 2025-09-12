@@ -124,7 +124,7 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 	initiatorNotificationOutbox.IdempotencyKey = strings.Replace(initiatorNotificationOutbox.IdempotencyKey, "[INIT_ID]", initID, 1)
 
 	appTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["THREAD_APPLICATION_TITLE"], "<role>", res.RoleName, 1)
-	appTitle = strings.Replace(appTitle, "<thread_title>", `"`+res.ThreadName, 1)
+	appTitle = strings.Replace(appTitle, "<thread_title>", res.ThreadName, 1)
 	initiatorNotificationOutbox.Title = appTitle
 
 	qInitNotifOutbox := `
