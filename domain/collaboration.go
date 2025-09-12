@@ -9,8 +9,9 @@ import (
 
 // // CollaborationRepository represent the collaboration repository contract
 type CollaborationRepository interface {
-	ThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication) (res response.ThreadCollaborationApplyRes,
-		initID string, err error)
+	ThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+		initiatorNotificationOutbox *entity.NotificationOutboxInsert, collabNotificationOutbox *entity.NotificationOutboxInsert,
+	) (res response.ThreadCollaborationApplyRes, initID string, err error)
 	RevertThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication) (err error)
 	RejectThreadCollaboration(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
 		pendingStatus string) (applicantID string, threadTitle string, err error)

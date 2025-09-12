@@ -7,6 +7,7 @@ import (
 	"prakarsa-app/entity"
 	"prakarsa-app/transport/response"
 	"prakarsa-app/utils"
+	"strings"
 
 	"github.com/lib/pq"
 )
@@ -23,7 +24,8 @@ func NewPgsqlCollaborationRepository(db *sql.DB) *pgsqlCollaborationRepository {
 }
 
 func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Context,
-	threadCollabApplicationPayload *entity.ThreadPartnerApplication) (res response.ThreadCollaborationApplyRes, initID string, err error) {
+	threadCollabApplicationPayload *entity.ThreadPartnerApplication, initiatorNotificationOutbox *entity.NotificationOutboxInsert,
+	collabNotificationOutbox *entity.NotificationOutboxInsert) (res response.ThreadCollaborationApplyRes, initID string, err error) {
 	// Mulai transaction
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -105,6 +107,47 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 		if errors.As(err, &pqe) && pqe.Constraint == "uniq_active_application_per_role" {
 			return res, initID, utils.NewForbiddenError("You cannot apply to the same role twice")
 		}
+		return
+	}
+	
+	// Initiator Notification
+	initiatorNotificationOutbox.UserID = initID
+	initiatorNotificationOutbox.IdempotencyKey = strings.Replace(initiatorNotificationOutbox.IdempotencyKey, "[INIT_ID]", initID, 1)
+
+	qInitNotifOutbox := `
+						 INSERT INTO notification_outbox
+								(id, user_id, type, reference_type, reference_id, headers_json,
+								 title, message, action_url, priority, status, attempt_count,
+								 next_attempt_at, idempotency_key, created_at, updated_at)
+							VALUES
+								($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',0,NOW(),$11,$12,$13)
+						`
+	if _, err = tx.ExecContext(ctx, qInitNotifOutbox,
+		initiatorNotificationOutbox.ID, initiatorNotificationOutbox.UserID, initiatorNotificationOutbox.Type, initiatorNotificationOutbox.ReferenceType,
+		initiatorNotificationOutbox.ReferenceID, initiatorNotificationOutbox.HeadersJSON, initiatorNotificationOutbox.Title, initiatorNotificationOutbox.Message,
+		initiatorNotificationOutbox.ActionURL, initiatorNotificationOutbox.Priority, initiatorNotificationOutbox.IdempotencyKey, initiatorNotificationOutbox.CreatedAt,
+		initiatorNotificationOutbox.UpdatedAt,
+	); err != nil {
+		// idempotency_key UNIQUE akan trigger duplicate error kalau kejadian enqueue ganda
+		return
+	}
+
+	// Collaborator Notification
+	qCollabNotifOutbox := `
+						 INSERT INTO notification_outbox
+								(id, user_id, type, reference_type, reference_id, headers_json,
+								 title, message, action_url, priority, status, attempt_count,
+								 next_attempt_at, idempotency_key, created_at, updated_at)
+							VALUES
+								($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',0,NOW(),$11,$12,$13)
+						`
+	if _, err = tx.ExecContext(ctx, qCollabNotifOutbox,
+		collabNotificationOutbox.ID, collabNotificationOutbox.UserID, collabNotificationOutbox.Type, collabNotificationOutbox.ReferenceType,
+		collabNotificationOutbox.ReferenceID, collabNotificationOutbox.HeadersJSON, collabNotificationOutbox.Title, collabNotificationOutbox.Message,
+		collabNotificationOutbox.ActionURL, collabNotificationOutbox.Priority, collabNotificationOutbox.IdempotencyKey, collabNotificationOutbox.CreatedAt,
+		collabNotificationOutbox.UpdatedAt,
+	); err != nil {
+		// idempotency_key UNIQUE akan trigger duplicate error kalau kejadian enqueue ganda
 		return
 	}
 
