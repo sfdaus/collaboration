@@ -10,7 +10,7 @@ type NotificationOutboxInsert struct {
 	Title          string
 	Message        string
 	ActionURL      *string // optional, boleh nil
-	Priority       int32
+	Priority       string
 	IdempotencyKey string
 	CreatedAt      int64
 	UpdatedAt      int64

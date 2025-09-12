@@ -72,7 +72,7 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 		HeadersJSON:   headersJSON,
 		Title:         appTitle,
 		Message:       request.Message,
-		Priority:      utils.NotificationPriority[utils.CollaborationNotificationPriority[utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE]],
+		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE],
 		IdempotencyKey: fmt.Sprintf(
 			"notif:thread_apply:init:%s:%s", threadCollabApplicationPayload.ID, "[INIT_ID]",
 		),
@@ -85,13 +85,13 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 	collabNotificationOutboxPayload = &entity.NotificationOutboxInsert{
 		ID:            uuid.NewString(),
 		UserID:        request.UserID,
-		Type:          utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE,
+		Type:          utils.THREAD_SELF_APPLICATION_NOTIFICATION_TYPE,
 		ReferenceType: utils.THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE,
 		ReferenceID:   threadCollabApplicationPayload.ID,
 		Title:         appTitle,
 		Message:       request.Message,
 		HeadersJSON:   headersJSON,
-		Priority:      utils.NotificationPriority[utils.CollaborationNotificationPriority[utils.THREAD_SELF_APPLICATION_NOTIFICATION_TYPE]],
+		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_SELF_APPLICATION_NOTIFICATION_TYPE],
 		IdempotencyKey: fmt.Sprintf(
 			"notif:thread_apply:collab:%s:%s", threadCollabApplicationPayload.ID, request.UserID,
 		),
