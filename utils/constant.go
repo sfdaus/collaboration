@@ -41,7 +41,7 @@ var CollaborationInitiatorNotificationTitle = map[string]string{
 }
 
 var CollaborationInitiatorNotificationMessage = map[string]string{
-	"THREAD_APPLICATION_MESSAGE": `Aplikasi yang kamu ajukan diterima!`,
+	"THREAD_APPLICATION_APPROVAL_MESSAGE": `Aplikasi yang kamu ajukan diterima!`,
 }
 
 var CollaborationSelfNotificationTitle = map[string]string{
@@ -59,4 +59,11 @@ var CollaborationNotificationPriority = map[string]string{
 	"THREAD_COLLAB_APPLICATION_INITIATOR": "high",
 	"THREAD_COLLAB_REJECTED":              "high",
 	"THREAD_COLLAB_APPROVED":              "high",
+}
+
+var NotificationIdempotencyKey = map[string]string{
+	"THREAD_COLLAB_APPLICATION_SELF":      "notif:thread_apply:collab",
+	"THREAD_COLLAB_APPLICATION_INITIATOR": "notif:thread_apply:init",
+	"THREAD_COLLAB_REJECTED":              "notif:thread_reject",
+	"THREAD_COLLAB_APPROVED":              "notif:thread_approve",
 }

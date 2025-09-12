@@ -14,12 +14,12 @@ type CollaborationRepository interface {
 	) (res response.ThreadCollaborationApplyRes, initID string, err error)
 	RevertThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication) (err error)
 	RejectThreadCollaboration(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
-		pendingStatus string) (applicantID string, threadTitle string, err error)
+		applicantNotificationOutbox *entity.NotificationOutboxInsert, pendingStatus string) (err error)
 	RevertThreadCollaborationReject(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
 		pendingStatus string) (err error)
 	ApproveThreadCollaboration(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
-		threadCollaborator *entity.ThreadCollaborator, pendingStatus string) (applicantID string, partnerTypeID string,
-		threadTitle string, err error)
+		threadCollaborator *entity.ThreadCollaborator, applicantNotificationOutbox *entity.NotificationOutboxInsert,
+		pendingStatus string) (err error)
 	RevertThreadCollaborationApprove(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
 		threadCollaborator *entity.ThreadCollaborator, pendingStatus, partnerTypeID string) (err error)
 }
