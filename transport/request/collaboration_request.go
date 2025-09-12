@@ -20,3 +20,32 @@ func (request ThreadCollaborationApplyReq) Validate() error {
 		validation.Field(&request.UserID, validation.Required),
 	)
 }
+
+// Reject Thread Collaboration request body
+type RejectThreadCollaborationReq struct {
+	ApplicationCollaborationID string `param:"applicationID"`
+	Message                    string `json:"message"`
+	UserID                     string
+}
+
+func (request RejectThreadCollaborationReq) Validate() error {
+	return validation.ValidateStruct(
+		&request,
+		validation.Field(&request.ApplicationCollaborationID, validation.Required),
+		validation.Field(&request.UserID, validation.Required),
+	)
+}
+
+// Approve Thread Collaboration request body
+type ApproveThreadCollaborationReq struct {
+	ApplicationCollaborationID string `param:"applicationID"`
+	UserID                     string
+}
+
+func (request ApproveThreadCollaborationReq) Validate() error {
+	return validation.ValidateStruct(
+		&request,
+		validation.Field(&request.ApplicationCollaborationID, validation.Required),
+		validation.Field(&request.UserID, validation.Required),
+	)
+}

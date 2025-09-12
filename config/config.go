@@ -14,6 +14,7 @@ type Config struct {
 	LoggerLevel    string
 	ContextTimeout int
 	JWTSecretKey   string
+	BaseUrlAPI     string
 }
 
 func LoadConfig() *Config {
@@ -26,6 +27,7 @@ func LoadConfig() *Config {
 		LoggerLevel:    getEnv("LOGGER_LEVEL", "info"),
 		ContextTimeout: getEnvInt("CONTEXT_TIMEOUT", 10),
 		JWTSecretKey:   mustGetEnv("JWT_SECRET_KEY"),
+		BaseUrlAPI:     mustGetEnv("BASE_URL_API"),
 	}
 	return cfg
 }

@@ -9,10 +9,24 @@ import (
 
 // // CollaborationRepository represent the collaboration repository contract
 type CollaborationRepository interface {
-	ThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication) (response.ThreadCollaborationApplyRes, error)
+	ThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+		initiatorNotificationOutbox *entity.NotificationOutboxInsert, collabNotificationOutbox *entity.NotificationOutboxInsert,
+	) (res response.ThreadCollaborationApplyRes, initID string, err error)
+	RevertThreadCollaborationApply(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication) (err error)
+	RejectThreadCollaboration(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+		pendingStatus string) (applicantID string, threadTitle string, err error)
+	RevertThreadCollaborationReject(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+		pendingStatus string) (err error)
+	ApproveThreadCollaboration(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+		threadCollaborator *entity.ThreadCollaborator, pendingStatus string) (applicantID string, partnerTypeID string,
+		threadTitle string, err error)
+	RevertThreadCollaborationApprove(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+		threadCollaborator *entity.ThreadCollaborator, pendingStatus, partnerTypeID string) (err error)
 }
 
 // CollaborationUsecase represent the collaboration usecase contract
 type CollaborationUsecase interface {
 	ThreadCollaborationApply(ctx context.Context, request *request.ThreadCollaborationApplyReq) (response.ThreadCollaborationApplyRes, error)
+	RejectThreadCollaboration(ctx context.Context, request *request.RejectThreadCollaborationReq) error
+	ApproveThreadCollaboration(ctx context.Context, request *request.ApproveThreadCollaborationReq) error
 }
