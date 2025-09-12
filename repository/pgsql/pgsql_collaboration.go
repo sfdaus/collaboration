@@ -182,8 +182,10 @@ func (r *pgsqlCollaborationRepository) RevertThreadCollaborationApply(ctx contex
 	return
 }
 
-func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Context,
-	threadCollabApplicationPayload *entity.ThreadPartnerApplication, pendingStatus string) (applicantID string, threadTitle string, err error) {
+func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+	applicantNotificationOutbox *entity.NotificationOutboxInsert, pendingStatus string) (err error) {
+	var threadTitle, applicantID string
+
 	// Mulai transaction
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -207,7 +209,7 @@ func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Con
 	if err = tx.QueryRowContext(ctx, qThreadApp, threadCollabApplicationPayload.ID, pendingStatus, threadCollabApplicationPayload.InitiatorUserID).
 		Scan(&applicantID, &threadID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return applicantID, threadTitle, utils.NewNotFoundError("Thread collaboration application not found")
+			return utils.NewNotFoundError("Thread collaboration application not found")
 		}
 		return
 	}
@@ -221,7 +223,7 @@ func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Con
 	if err = tx.QueryRowContext(ctx, qThread, threadID).
 		Scan(&threadTitle); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return applicantID, threadTitle, utils.NewNotFoundError("Thread not found")
+			return utils.NewNotFoundError("Thread not found")
 		}
 		return
 	}
@@ -239,8 +241,34 @@ func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Con
 		threadCollabApplicationPayload.ID, threadCollabApplicationPayload.InitiatorUserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return applicantID, threadTitle, utils.NewNotFoundError("Application not found")
+			return utils.NewNotFoundError("Application not found")
 		}
+		return
+	}
+
+	// Applicant Notification
+	applicantNotificationOutbox.UserID = applicantID
+	newTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["APPLICATION_REJECTED_TITLE"],
+		"<thread_title>", threadTitle, 1)
+	applicantNotificationOutbox.Title = newTitle
+
+	applicantNotificationOutbox.IdempotencyKey = strings.Replace(applicantNotificationOutbox.IdempotencyKey, "[APPLICANT_ID]", applicantID, 1)
+
+	qCollabNotifOutbox := `
+						 INSERT INTO notification_outbox
+								(id, user_id, type, reference_type, reference_id, headers_json,
+								 title, message, action_url, priority, status, attempt_count,
+								 next_attempt_at, idempotency_key, created_at, updated_at)
+							VALUES
+								($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',0,NOW(),$11,$12,$13)
+						`
+	if _, err = tx.ExecContext(ctx, qCollabNotifOutbox,
+		applicantNotificationOutbox.ID, applicantNotificationOutbox.UserID, applicantNotificationOutbox.Type, applicantNotificationOutbox.ReferenceType,
+		applicantNotificationOutbox.ReferenceID, applicantNotificationOutbox.HeadersJSON, applicantNotificationOutbox.Title, applicantNotificationOutbox.Message,
+		applicantNotificationOutbox.ActionURL, applicantNotificationOutbox.Priority, applicantNotificationOutbox.IdempotencyKey, applicantNotificationOutbox.CreatedAt,
+		applicantNotificationOutbox.UpdatedAt,
+	); err != nil {
+		// idempotency_key UNIQUE akan trigger duplicate error kalau kejadian enqueue ganda
 		return
 	}
 
@@ -270,7 +298,8 @@ func (r *pgsqlCollaborationRepository) RevertThreadCollaborationReject(ctx conte
 
 func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Context,
 	threadCollabApplicationPayload *entity.ThreadPartnerApplication, threadCollaborator *entity.ThreadCollaborator,
-	pendingStatus string) (applicantID string, threadTitle string, partnerTypeID string, err error) {
+	applicantNotificationOutbox *entity.NotificationOutboxInsert, pendingStatus string) (err error) {
+	var applicantID, threadTitle, partnerTypeID string
 
 	// Mulai transaction
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -295,7 +324,7 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 	if err = tx.QueryRowContext(ctx, qThreadApp, threadCollabApplicationPayload.ID, pendingStatus, threadCollabApplicationPayload.InitiatorUserID).
 		Scan(&applicantID, &threadID, &partnerTypeID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return applicantID, threadTitle, partnerTypeID, utils.NewNotFoundError("Thread collaboration application not found")
+			return utils.NewNotFoundError("Thread collaboration application not found")
 		}
 		return
 	}
@@ -328,7 +357,7 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 	if err = tx.QueryRowContext(ctx, qThread, threadID).
 		Scan(&threadTitle); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return applicantID, threadTitle, partnerTypeID, utils.NewNotFoundError("Thread not found")
+			return utils.NewNotFoundError("Thread not found")
 		}
 		return
 	}
@@ -370,6 +399,32 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 					WHERE id = $1 AND is_active = true`
 
 	if _, err = tx.ExecContext(ctx, qPartnerType, partnerTypeID); err != nil {
+		return
+	}
+
+	// Applicant Notification
+	applicantNotificationOutbox.UserID = applicantID
+	newTitle := strings.Replace(utils.CollaborationInitiatorNotificationTitle["APPLICATION_APPROVED_TITLE"],
+		"<thread_title>", threadTitle, 1)
+	applicantNotificationOutbox.Title = newTitle
+
+	applicantNotificationOutbox.IdempotencyKey = strings.Replace(applicantNotificationOutbox.IdempotencyKey, "[APPLICANT_ID]", applicantID, 1)
+
+	qCollabNotifOutbox := `
+						 INSERT INTO notification_outbox
+								(id, user_id, type, reference_type, reference_id, headers_json,
+								 title, message, action_url, priority, status, attempt_count,
+								 next_attempt_at, idempotency_key, created_at, updated_at)
+							VALUES
+								($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',0,NOW(),$11,$12,$13)
+						`
+	if _, err = tx.ExecContext(ctx, qCollabNotifOutbox,
+		applicantNotificationOutbox.ID, applicantNotificationOutbox.UserID, applicantNotificationOutbox.Type, applicantNotificationOutbox.ReferenceType,
+		applicantNotificationOutbox.ReferenceID, applicantNotificationOutbox.HeadersJSON, applicantNotificationOutbox.Title, applicantNotificationOutbox.Message,
+		applicantNotificationOutbox.ActionURL, applicantNotificationOutbox.Priority, applicantNotificationOutbox.IdempotencyKey, applicantNotificationOutbox.CreatedAt,
+		applicantNotificationOutbox.UpdatedAt,
+	); err != nil {
+		// idempotency_key UNIQUE akan trigger duplicate error kalau kejadian enqueue ganda
 		return
 	}
 
