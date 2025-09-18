@@ -8,6 +8,7 @@ import (
 	"prakarsa-app/transport/response"
 	"prakarsa-app/utils"
 	"strings"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -42,21 +43,22 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 	// 1) Ambil owner thread & status aktif
 	var title string
 	var threadActive bool
+	var deadline *time.Time
 
-	qThread := `SELECT t.title, t.user_id AS owner_id, t.is_active
+	qThread := `SELECT t.title, t.user_id AS owner_id, t.is_active, t.deadline
 				  FROM threads t
 				  WHERE t.id = $1
 				  FOR SHARE`
 
 	if err = tx.QueryRowContext(ctx, qThread, threadCollabApplicationPayload.ThreadID).
-		Scan(&title, &initID, &threadActive); err != nil {
+		Scan(&title, &initID, &threadActive, &deadline); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return res, initID, utils.NewNotFoundError("Thread or Role not found")
 		}
 		return
 	}
 
-	if !threadActive {
+	if !threadActive || deadline.Before(time.Now()) {
 		return res, initID, utils.NewNotFoundError("Thread is not active")
 	}
 
