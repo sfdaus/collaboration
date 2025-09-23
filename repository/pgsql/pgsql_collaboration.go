@@ -58,7 +58,7 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 		return
 	}
 
-	if !threadActive || deadline.Before(time.Now()) {
+	if deadline != nil && (!threadActive || deadline.Before(time.Now())) {
 		return res, initID, utils.NewNotFoundError("Thread is not active")
 	}
 
