@@ -332,8 +332,8 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 	}
 
 	// LOCK role & cek kapasitas
-	var need, full int
-	qRole := `SELECT amount_needed, amount_fulfilled
+	var need, full int64
+	qRole := `SELECT COALESCE(amount_needed,0) as amount_needed, COALESCE(amount_fulfilled,0) as amount_fulfilled
 			FROM thread_partner_types
 			WHERE id=$1 AND thread_id=$2
 			FOR UPDATE`
