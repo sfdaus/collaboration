@@ -64,7 +64,8 @@ func main() {
 	// Setup route engine & middleware
 	e := echo.New()
 	e.Use(middleware.CORS())
-	e.Use(appMiddleware.Logger(nil))
+	//e.Use(appMiddleware.Logger(nil))
+	e.Use(appMiddleware.CustomLogger())
 	e.Logger.Info("🚀 Server is alive and running")
 
 	// Setup handler
