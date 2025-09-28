@@ -226,3 +226,25 @@ func (u *CollaborationUsecase) MyThreadCollaboration(c context.Context, request 
 
 	return
 }
+
+func (u *CollaborationUsecase) MyThreadCollaborationRequests(c context.Context, request *request.MyThreadCollaborationRequestsReq) (res []response.MyThreadCollaborationRequestsRes, meta response.MetaRes, err error) {
+	ctx, cancel := context.WithTimeout(c, u.ctxTimeout)
+	defer cancel()
+
+	res, meta, err = u.collaborationRepo.MyThreadCollaborationRequests(ctx, request)
+	if err != nil {
+		return
+	}
+
+	// Map response
+	if len(res) > 0 {
+		for i, item := range res {
+			res[i].Profile.Avatar, err = u.s3Repo.GetPresignedURL(c, config.LoadConfig().S3Bucket, item.Profile.Avatar, false, time.Duration(24*time.Hour))
+			if err != nil {
+				return res, meta, err
+			}
+		}
+	}
+
+	return
+}

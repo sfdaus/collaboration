@@ -22,3 +22,13 @@ type MyThreadCollaborationRes struct {
 	Status              string               `json:"status"`
 	CreatedAt           int64                `json:"created_at"`
 }
+
+// My Thread Collaboration Requests Response
+type MyThreadCollaborationRequestsRes struct {
+	ID              string               `json:"id"`
+	ThreadName      string               `json:"thread_name"`
+	PartnerTypeName string               `json:"partner_type_name"`
+	Message         string               `json:"message"`
+	Profile         entity.SimpleProfile `json:"profile"`
+	CreatedAt       int64                `json:"created_at"`
+}
