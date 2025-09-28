@@ -22,6 +22,8 @@ type CollaborationRepository interface {
 		pendingStatus string) (err error)
 	RevertThreadCollaborationApprove(ctx context.Context, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
 		threadCollaborator *entity.ThreadCollaborator, pendingStatus, partnerTypeID string) (err error)
+	MyThreadCollaboration(ctx context.Context, request *request.MyThreadCollaborationReq) ([]response.MyThreadCollaborationRes, response.MetaRes, error)
+	MyThreadCollaborationRequests(ctx context.Context, request *request.MyThreadCollaborationRequestsReq) ([]response.MyThreadCollaborationRequestsRes, response.MetaRes, error)
 }
 
 // CollaborationUsecase represent the collaboration usecase contract
@@ -29,4 +31,6 @@ type CollaborationUsecase interface {
 	ThreadCollaborationApply(ctx context.Context, request *request.ThreadCollaborationApplyReq) (response.ThreadCollaborationApplyRes, error)
 	RejectThreadCollaboration(ctx context.Context, request *request.RejectThreadCollaborationReq) error
 	ApproveThreadCollaboration(ctx context.Context, request *request.ApproveThreadCollaborationReq) error
+	MyThreadCollaboration(ctx context.Context, request *request.MyThreadCollaborationReq) ([]response.MyThreadCollaborationRes, response.MetaRes, error)
+	MyThreadCollaborationRequests(ctx context.Context, request *request.MyThreadCollaborationRequestsReq) ([]response.MyThreadCollaborationRequestsRes, response.MetaRes, error)
 }

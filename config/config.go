@@ -15,6 +15,12 @@ type Config struct {
 	ContextTimeout int
 	JWTSecretKey   string
 	BaseUrlAPI     string
+	S3Endpoint     string
+	S3AccessKey    string
+	S3SecretKey    string
+	S3UseSSL       bool
+	S3PublicDomain string
+	S3Bucket       string
 }
 
 func LoadConfig() *Config {
@@ -28,6 +34,12 @@ func LoadConfig() *Config {
 		ContextTimeout: getEnvInt("CONTEXT_TIMEOUT", 10),
 		JWTSecretKey:   mustGetEnv("JWT_SECRET_KEY"),
 		BaseUrlAPI:     mustGetEnv("BASE_URL_API"),
+		S3Endpoint:     mustGetEnv("S3_ENDPOINT"),
+		S3AccessKey:    mustGetEnv("S3_ACCESS_KEY"),
+		S3SecretKey:    mustGetEnv("S3_SECRET_KEY"),
+		S3UseSSL:       getEnvBool("S3_USE_SSL", true),
+		S3PublicDomain: mustGetEnv("S3_PUBLIC_DOMAIN"),
+		S3Bucket:       mustGetEnv("S3_BUCKET"),
 	}
 	return cfg
 }
@@ -54,4 +66,13 @@ func mustGetEnv(key string) string {
 	}
 	log.Fatalf("%s is required", key)
 	return ""
+}
+
+func getEnvBool(key string, def bool) bool {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return def
 }

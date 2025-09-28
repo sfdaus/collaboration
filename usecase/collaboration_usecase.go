@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"prakarsa-app/config"
 	"prakarsa-app/entity"
 	"prakarsa-app/infrastructure/transport/clients/ports"
 	"prakarsa-app/transport/response"
@@ -14,6 +15,7 @@ import (
 
 	"prakarsa-app/domain"
 	"prakarsa-app/repository/redis"
+	"prakarsa-app/repository/s3"
 	"prakarsa-app/transport/request"
 )
 
@@ -22,16 +24,18 @@ type CollaborationUsecase struct {
 	redisRepo         redis.RedisRepository
 	ctxTimeout        time.Duration
 	notifClient       ports.Notification
+	s3Repo            s3.S3Repository
 }
 
 // NewCollaborationUsecase will create new an notificationUsecase object representation of ThreadUsecase interface
 func NewCollaborationUsecase(collaborationRepo domain.CollaborationRepository, redisRepo redis.RedisRepository,
-	ctxTimeout time.Duration, notifClient ports.Notification) *CollaborationUsecase {
+	ctxTimeout time.Duration, notifClient ports.Notification, s3Repo s3.S3Repository) *CollaborationUsecase {
 	return &CollaborationUsecase{
 		collaborationRepo: collaborationRepo,
 		redisRepo:         redisRepo,
 		ctxTimeout:        ctxTimeout,
 		notifClient:       notifClient,
+		s3Repo:            s3Repo,
 	}
 }
 
@@ -196,6 +200,50 @@ func (u *CollaborationUsecase) ApproveThreadCollaboration(c context.Context, req
 		threadCollaboratorPayload, applicantNotificationOutboxPayload, utils.PENDING_APPLICATION_STATUS)
 	if err != nil {
 		return
+	}
+
+	return
+}
+
+func (u *CollaborationUsecase) MyThreadCollaboration(c context.Context, request *request.MyThreadCollaborationReq) (res []response.MyThreadCollaborationRes, meta response.MetaRes, err error) {
+	ctx, cancel := context.WithTimeout(c, u.ctxTimeout)
+	defer cancel()
+
+	res, meta, err = u.collaborationRepo.MyThreadCollaboration(ctx, request)
+	if err != nil {
+		return
+	}
+
+	// Map response
+	if len(res) > 0 {
+		for i, item := range res {
+			res[i].Profile.Avatar, err = u.s3Repo.GetPresignedURL(c, config.LoadConfig().S3Bucket, item.Profile.Avatar, false, time.Duration(24*time.Hour))
+			if err != nil {
+				return res, meta, err
+			}
+		}
+	}
+
+	return
+}
+
+func (u *CollaborationUsecase) MyThreadCollaborationRequests(c context.Context, request *request.MyThreadCollaborationRequestsReq) (res []response.MyThreadCollaborationRequestsRes, meta response.MetaRes, err error) {
+	ctx, cancel := context.WithTimeout(c, u.ctxTimeout)
+	defer cancel()
+
+	res, meta, err = u.collaborationRepo.MyThreadCollaborationRequests(ctx, request)
+	if err != nil {
+		return
+	}
+
+	// Map response
+	if len(res) > 0 {
+		for i, item := range res {
+			res[i].Profile.Avatar, err = u.s3Repo.GetPresignedURL(c, config.LoadConfig().S3Bucket, item.Profile.Avatar, false, time.Duration(24*time.Hour))
+			if err != nil {
+				return res, meta, err
+			}
+		}
 	}
 
 	return
