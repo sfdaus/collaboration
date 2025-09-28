@@ -25,8 +25,8 @@ func NewCollaborationHandler(e *echo.Echo, middleware *middleware.Middleware, re
 	apiV1.POST("/collaborations/threads/:threadID/apply", handler.ThreadCollaborationApply)
 	apiV1.POST("/collaborations/threads/:applicationID/reject", handler.RejectThreadCollaboration)
 	apiV1.POST("/collaborations/threads/:applicationID/approve", handler.ApproveThreadCollaboration)
-	apiV1.GET("/collaborations/threads/mine", handler.MyThreadCollaboration)
-	apiV1.GET("/collaborations/threads/request/mine", handler.MyThreadCollaborationRequests)
+	apiV1.GET("/collaborations/threads/requests/mine", handler.MyThreadCollaboration)
+	apiV1.GET("/collaborations/threads/pending-requests", handler.MyThreadCollaborationRequests)
 }
 
 func (h *CollaborationHandler) ThreadCollaborationApply(c echo.Context) error {
