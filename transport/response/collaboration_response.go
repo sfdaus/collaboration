@@ -9,3 +9,7 @@ type ThreadCollaborationApplyRes struct {
 	RoleName   string `json:"role_name"`
 	Status     string `json:"status"`
 }
+
+// My Thread Collaboration Response
+type MyThreadCollaborationRes struct {
+}

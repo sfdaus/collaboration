@@ -103,7 +103,7 @@ func (h *CollaborationHandler) ApproveThreadCollaboration(c echo.Context) error 
 
 func (h *CollaborationHandler) MyThreadCollaboration(c echo.Context) error {
 	ctx := c.Request().Context()
-	var req request.ApproveThreadCollaborationReq
+	var req request.MyThreadCollaborationReq
 
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, utils.NewUnprocessableEntityError(err.Error()))
@@ -116,13 +116,13 @@ func (h *CollaborationHandler) MyThreadCollaboration(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, utils.NewInvalidInputError(errVal))
 	}
 
-	if err := h.CollaborationUC.ApproveThreadCollaboration(ctx, &req); err != nil {
+	if res, meta, err := h.CollaborationUC.MyThreadCollaboration(ctx, &req); err != nil {
 		return c.JSON(utils.ParseHttpErrorToBasicResponse(err, "Get thread collaboration failed"))
 	} else {
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"message": "Thread collaboration successfully retrieved",
-			//"data":    res,
-			//"meta":    meta,
+			"data":    res,
+			"meta":    meta,
 		})
 	}
 }
