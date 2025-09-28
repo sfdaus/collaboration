@@ -63,7 +63,6 @@ func (request MyThreadCollaborationReq) Validate() error {
 		&request,
 		validation.Field(&request.UserID, validation.Required),
 		validation.Field(&request.Status,
-			validation.Required,
 			validation.In("PENDING", "ACCEPTED", "REJECTED"),
 		),
 	)

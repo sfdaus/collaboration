@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"prakarsa-app/entity"
+	"prakarsa-app/transport/request"
 	"prakarsa-app/transport/response"
 	"prakarsa-app/utils"
 	"strings"
@@ -487,5 +489,128 @@ func (r *pgsqlCollaborationRepository) RevertThreadCollaborationApprove(ctx cont
 	if err = tx.Commit(); err != nil {
 		return
 	}
+	return
+}
+
+func (r *pgsqlCollaborationRepository) MyThreadCollaboration(ctx context.Context, request *request.MyThreadCollaborationReq) (res []response.MyThreadCollaborationRes, meta response.MetaRes, err error) {
+	// Mulai transaction
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	// Pastikan rollback kalau ada error
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// --- pagination ---
+	perPage := request.PerPage
+	if perPage <= 0 {
+		perPage = 10
+	}
+	page := request.Page
+	if page <= 0 {
+		page = 1
+	}
+	meta.Page, meta.PerPage = page, perPage
+	offset := (page - 1) * perPage
+
+	// --- WHERE builder (mirip template-mu) ---
+	wheres := []string{}
+	args := []any{}
+	idx := 1
+
+	// wajib: aplikasi yang diajukan oleh user ini
+	wheres = append(wheres, fmt.Sprintf("taa.applicant_user_id = $%d", idx))
+	args = append(args, request.UserID)
+	idx++
+
+	// optional: status
+	if s := strings.TrimSpace(request.Status); s != "" {
+		wheres = append(wheres, fmt.Sprintf("taa.status = $%d", idx))
+		args = append(args, s)
+		idx++
+	}
+
+	// contoh: hanya active (hapus baris ini kalau tidak pakai is_active)
+	wheres = append(wheres, "COALESCE(taa.is_active, TRUE)")
+	whereSQL := ""
+	if len(wheres) > 0 {
+		whereSQL = "WHERE " + strings.Join(wheres, " AND ")
+	}
+
+	// --- COUNT ---
+	countSQL := `
+        SELECT COUNT(*)
+        FROM thread_partner_applications taa
+        JOIN thread_partner_types tpt ON tpt.id = taa.thread_partner_type_id
+        JOIN threads t               ON t.id  = tpt.thread_id
+    ` + whereSQL
+	if err = tx.QueryRowContext(ctx, countSQL, args...).Scan(&meta.TotalData); err != nil {
+		return
+	}
+	meta.TotalPages = (meta.TotalData + perPage - 1) / perPage
+
+	// --- DATA ---
+	// tambahkan limit+offset ke args
+	args = append(args, perPage, offset)
+	limitPos, offsetPos := idx, idx+1
+
+	dataSQL := fmt.Sprintf(`
+        SELECT
+            t.id                          AS thread_id,
+            t.title                       AS thread_name,
+            tpt.id                        AS thread_partner_type_id,
+            pt.name                       AS partner_type_name,
+            p.name                        AS profile_name,
+            p.name_alias                  AS profile_name_alias,
+            p.avatar                      AS profile_avatar,
+            taa.status                    AS status,
+            COALESCE(taa.updated_at, taa.created_at) AS created_at
+        FROM thread_partner_applications taa
+        JOIN thread_partner_types tpt ON tpt.id      = taa.thread_partner_type_id
+        JOIN partner_types pt        ON pt.id       = tpt.partner_type_id
+        JOIN threads t               ON t.id        = tpt.thread_id
+        JOIN profiles p              ON p.user_id   = t.user_id  -- author thread
+        %s
+        ORDER BY COALESCE(taa.updated_at, taa.created_at) DESC
+        LIMIT $%d OFFSET $%d
+    `, whereSQL, limitPos, offsetPos)
+
+	rows, err := tx.QueryContext(ctx, dataSQL, args...)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	out := make([]response.MyThreadCollaborationRes, 0, perPage)
+	for rows.Next() {
+		var item response.MyThreadCollaborationRes
+		var prof entity.SimpleProfile
+		if err = rows.Scan(
+			&item.ThreadID,
+			&item.ThreadName,
+			&item.ThreadPartnerTypeID,
+			&item.PartnerTypeName,
+			&prof.Name,
+			&prof.NameAlias,
+			&prof.Avatar,
+			&item.Status,
+			&item.CreatedAt,
+		); err != nil {
+			return
+		}
+		item.Profile = prof
+		out = append(out, item)
+	}
+	if err = rows.Err(); err != nil {
+		return
+	}
+
+	res = out
+	err = tx.Commit()
 	return
 }
