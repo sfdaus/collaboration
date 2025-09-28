@@ -397,7 +397,7 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 
 	// Update amount fulfilled
 	qPartnerType := `UPDATE thread_partner_types
-					SET amount_fulfilled = amount_fulfilled + 1
+					SET amount_fulfilled = COALESCE(amount_fulfilled, 0) + 1
 					WHERE id = $1 AND is_active = true`
 
 	if _, err = tx.ExecContext(ctx, qPartnerType, partnerTypeID); err != nil {
