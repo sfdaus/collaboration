@@ -581,7 +581,7 @@ func (r *pgsqlCollaborationRepository) MyThreadCollaboration(ctx context.Context
         SELECT
             t.id                          AS thread_id,
             t.title                       AS thread_name,
-            tpt.id                        AS thread_partner_type_id,
+            taa.id                        AS application_id,
             pt.name                       AS partner_type_name,
             p.name                        AS profile_name,
             p.name_alias                  AS profile_name_alias,
@@ -611,7 +611,7 @@ func (r *pgsqlCollaborationRepository) MyThreadCollaboration(ctx context.Context
 		if err = rows.Scan(
 			&item.ThreadID,
 			&item.ThreadName,
-			&item.ThreadPartnerTypeID,
+			&item.ApplicationID,
 			&item.PartnerTypeName,
 			&prof.Name,
 			&prof.NameAlias,
