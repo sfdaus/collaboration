@@ -95,3 +95,23 @@ func (request AcceptedThreadCollaborationRequestsReq) Validate() error {
 		validation.Field(&request.UserID, validation.Required),
 	)
 }
+
+// Cancel Thread Collaboration request body
+type CancelThreadCollaborationReq struct {
+	ApplicationCollaborationID string `param:"applicationID"`
+	UserRelation               string `json:"user_relation"`
+	Message                    string `json:"message"`
+	UserID                     string
+}
+
+func (request CancelThreadCollaborationReq) Validate() error {
+	return validation.ValidateStruct(
+		&request,
+		validation.Field(&request.ApplicationCollaborationID, validation.Required),
+		validation.Field(&request.UserID, validation.Required),
+		validation.Field(&request.UserRelation,
+			validation.Required,
+			validation.In("INITIATOR", "COLLABORATOR"),
+		),
+	)
+}

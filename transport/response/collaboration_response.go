@@ -42,3 +42,8 @@ type AcceptedThreadCollaborationRequestsRes struct {
 	Profile         entity.SimpleProfile `json:"profile"`
 	CreatedAt       int64                `json:"created_at"`
 }
+
+// Cancel Thread Collaboration Response
+type CancelThreadCollaborationRes struct {
+	ApplicationID string `json:"application_id"`
+}

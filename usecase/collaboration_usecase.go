@@ -271,3 +271,39 @@ func (u *CollaborationUsecase) AcceptedThreadCollaborationRequests(c context.Con
 
 	return
 }
+
+func (u *CollaborationUsecase) CancelThreadCollaboration(c context.Context, request *request.CancelThreadCollaborationReq) (err error) {
+	ctx, cancel := context.WithTimeout(c, u.ctxTimeout)
+	defer cancel()
+
+	var threadCollabApplicationPayload entity.ThreadPartnerApplication
+	var threadCollaboratorPayload entity.ThreadCollaborator
+
+	threadCollabApplicationPayload = entity.ThreadPartnerApplication{
+		ID:        request.ApplicationCollaborationID,
+		Status:    utils.CANCELLED_APPLICATION_STATUS,
+		UpdatedAt: time.Now().Unix(),
+		UpdatedBy: request.UserID,
+	}
+
+	threadCollaboratorPayload = entity.ThreadCollaborator{
+		LeftAt:    time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+		UpdatedBy: request.UserID,
+	}
+
+	if request.UserRelation == utils.THREAD_INITIATOR {
+		// Collaborator payload
+		threadCollaboratorPayload.Status = utils.REMOVED_COLLABORATION_STATUS
+	} else if request.UserRelation == utils.THREAD_COLLABORATOR {
+		// Collaborator payload
+		threadCollaboratorPayload.Status = utils.LEFT_COLLABORATION_STATUS
+	}
+
+	err = u.collaborationRepo.CancelThreadCollaboration(ctx, request, &threadCollabApplicationPayload, &threadCollaboratorPayload)
+	if err != nil {
+		return
+	}
+
+	return
+}

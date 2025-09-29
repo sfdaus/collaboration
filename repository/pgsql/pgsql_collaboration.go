@@ -96,6 +96,24 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 		return res, initID, utils.NewBadRequestError("Capacity for this role is full")
 	}
 
+	// Pengecekan kalau dia sudah mendaftar pada projek atau thread tersebut
+	var tAppID, tAppStatus string
+	tApplication := `SELECT tpa.id, tpa.status
+				  FROM thread_partner_applications tpa
+				  WHERE tpa.thread_id = $1 AND tpa.applicant_user_id = $2
+				  ORDER BY COALESCE(tpa.updated_at, tpa.created_at) DESC
+				  LIMIT 1
+				  FOR SHARE`
+
+	if err = tx.QueryRowContext(ctx, tApplication, threadCollabApplicationPayload.ThreadID, threadCollabApplicationPayload.ApplicantUserID).
+		Scan(&tAppID, &tAppStatus); err != nil {
+		return
+	}
+
+	if tAppStatus == utils.PENDING_APPLICATION_STATUS || tAppStatus == utils.ACCEPTED_APPLICATION_STATUS {
+		return res, initID, utils.NewBadRequestError("Your are already applying for this project or thread")
+	}
+
 	// 3) Insert thread application
 	qInsert := `INSERT INTO thread_partner_applications
 					(id, thread_id, thread_partner_type_id, applicant_user_id, initiator_user_id,
@@ -842,5 +860,139 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 
 	res = out
 	err = tx.Commit()
+	return
+}
+
+func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Context, request *request.CancelThreadCollaborationReq, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+	threadCollaboratorPayload *entity.ThreadCollaborator) (err error) {
+
+	// Mulai transaction
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	// Pastikan rollback kalau ada error
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Check user relation to app id
+	var userQ, threadID, threadPartnerTypeID, applicationStatus string
+	if request.UserRelation == utils.THREAD_COLLABORATOR {
+		userQ = "applicant_user_id"
+	} else {
+		userQ = "initiator_user_id"
+	}
+
+	// Checker collaboration application
+	qThreadApp := fmt.Sprintf(`SELECT thread_id, thread_partner_type_id, status
+				  FROM thread_partner_applications
+				  WHERE is_active = true AND %s = $1 AND id = $2
+				  FOR SHARE`, userQ)
+
+	if err = tx.QueryRowContext(ctx, qThreadApp, request.UserID, threadCollabApplicationPayload.ID).Scan(&threadID, &threadPartnerTypeID,
+		&applicationStatus); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return utils.NewNotFoundError("Thread collaboration application not found")
+		}
+		return
+	}
+
+	// Update application status + cek RowsAffected()
+	query := `UPDATE thread_partner_applications
+				SET status = $1,
+					updated_at = $2,
+					updated_by = $3
+				WHERE id = $4 AND is_active = true`
+
+	res, err := tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
+		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.ID)
+
+	if err != nil {
+		return
+	}
+
+	if n, _ := res.RowsAffected(); n == 0 {
+		err = utils.NewNotFoundError("Application not found or already processed")
+		return
+	}
+
+	// Update application status + cek RowsAffected()
+	query = `UPDATE thread_partner_applications
+				SET status = $1,
+					updated_at = $2,
+					updated_by = $3
+				WHERE id = $4 AND is_active = true`
+
+	res, err = tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
+		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.ID)
+
+	if err != nil {
+		return
+	}
+
+	if n, _ := res.RowsAffected(); n == 0 {
+		err = utils.NewNotFoundError("Application not found or already processed")
+		return
+	}
+
+	if applicationStatus == utils.ACCEPTED_APPLICATION_STATUS {
+		// Update application status + cek RowsAffected()
+		query = `UPDATE thread_partner_applications
+				SET status = $1,
+					updated_at = $2,
+					updated_by = $3
+				WHERE id = $4 AND is_active = true`
+
+		res, err = tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
+			threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.ID)
+
+		if err != nil {
+			return
+		}
+
+		if n, _ := res.RowsAffected(); n == 0 {
+			err = utils.NewNotFoundError("Application not found or already processed")
+			return
+		}
+
+		// Update thread collaborator status + cek RowsAffected()
+		query = `UPDATE thread_collaborators
+				SET status = $1,
+					updated_at = $2,
+					updated_by = $3,
+					left_at = $4
+				WHERE id = $5 AND thread_partner_application_id = $6 AND is_active = true`
+
+		res, err = tx.ExecContext(ctx, query, threadCollaboratorPayload.Status, threadCollaboratorPayload.UpdatedAt,
+			threadCollaboratorPayload.UpdatedBy, threadCollaboratorPayload.LeftAt, threadCollabApplicationPayload.ID,
+			request.ApplicationCollaborationID)
+
+		if err != nil {
+			return
+		}
+
+		if n, _ := res.RowsAffected(); n == 0 {
+			err = utils.NewNotFoundError("Thread Collaborator not found or already processed")
+			return
+		}
+
+		// Revert amount fulfilled
+		qPartnerType := `UPDATE thread_partner_types
+					SET amount_fulfilled = amount_fulfilled - 1
+					WHERE id = $1 AND is_active = true`
+
+		if _, err = tx.ExecContext(ctx, qPartnerType, threadPartnerTypeID); err != nil {
+			return
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return
+	}
+
 	return
 }
