@@ -890,11 +890,11 @@ func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Con
 	// Checker collaboration application
 	qThreadApp := fmt.Sprintf(`SELECT thread_id, thread_partner_type_id, status
 				  FROM thread_partner_applications
-				  WHERE is_active = true AND %s = $1 AND id = $2
+				  WHERE is_active = true AND %s = $1 AND id = $2 AND status IN ($3, $4)
 				  FOR SHARE`, userQ)
 
-	if err = tx.QueryRowContext(ctx, qThreadApp, request.UserID, threadCollabApplicationPayload.ID).Scan(&threadID, &threadPartnerTypeID,
-		&applicationStatus); err != nil {
+	if err = tx.QueryRowContext(ctx, qThreadApp, request.UserID, threadCollabApplicationPayload.ID, utils.ACCEPTED_APPLICATION_STATUS,
+		utils.PENDING_APPLICATION_STATUS).Scan(&threadID, &threadPartnerTypeID, &applicationStatus); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return utils.NewNotFoundError("Thread collaboration application not found")
 		}
@@ -902,34 +902,15 @@ func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Con
 	}
 
 	// Update application status + cek RowsAffected()
-	query := `UPDATE thread_partner_applications
+	query := fmt.Sprintf(`UPDATE thread_partner_applications
 				SET status = $1,
 					updated_at = $2,
 					updated_by = $3,
 					cancel_reason = $4
-				WHERE id = $5 AND is_active = true`
+				WHERE id = $5 AND is_active = true AND %s = $6`, userQ)
 
 	res, err := tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
-		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.CancelReason, threadCollabApplicationPayload.ID)
-
-	if err != nil {
-		return
-	}
-
-	if n, _ := res.RowsAffected(); n == 0 {
-		err = utils.NewNotFoundError("Application not found or already processed")
-		return
-	}
-
-	// Update application status + cek RowsAffected()
-	query = `UPDATE thread_partner_applications
-				SET status = $1,
-					updated_at = $2,
-					updated_by = $3
-				WHERE id = $4 AND is_active = true`
-
-	res, err = tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
-		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.ID)
+		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.CancelReason, threadCollabApplicationPayload.ID, request.UserID)
 
 	if err != nil {
 		return
@@ -941,36 +922,16 @@ func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Con
 	}
 
 	if applicationStatus == utils.ACCEPTED_APPLICATION_STATUS {
-		// Update application status + cek RowsAffected()
-		query = `UPDATE thread_partner_applications
-				SET status = $1,
-					updated_at = $2,
-					updated_by = $3
-				WHERE id = $4 AND is_active = true`
-
-		res, err = tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
-			threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.ID)
-
-		if err != nil {
-			return
-		}
-
-		if n, _ := res.RowsAffected(); n == 0 {
-			err = utils.NewNotFoundError("Application not found or already processed")
-			return
-		}
-
 		// Update thread collaborator status + cek RowsAffected()
 		query = `UPDATE thread_collaborators
 				SET status = $1,
 					updated_at = $2,
 					updated_by = $3,
 					left_at = $4
-				WHERE id = $5 AND thread_partner_application_id = $6 AND is_active = true`
+				WHERE thread_partner_application_id = $5 AND is_active = true`
 
 		res, err = tx.ExecContext(ctx, query, threadCollaboratorPayload.Status, threadCollaboratorPayload.UpdatedAt,
-			threadCollaboratorPayload.UpdatedBy, threadCollaboratorPayload.LeftAt, threadCollabApplicationPayload.ID,
-			request.ApplicationCollaborationID)
+			threadCollaboratorPayload.UpdatedBy, threadCollaboratorPayload.LeftAt, request.ApplicationCollaborationID)
 
 		if err != nil {
 			return
