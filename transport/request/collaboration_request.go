@@ -81,3 +81,17 @@ func (request MyThreadCollaborationRequestsReq) Validate() error {
 		validation.Field(&request.UserID, validation.Required),
 	)
 }
+
+// Accepted Thread Collaboration Requests request body
+type AcceptedThreadCollaborationRequestsReq struct {
+	PerPage int64 `query:"per_page"`
+	Page    int64 `query:"page"`
+	UserID  string
+}
+
+func (request AcceptedThreadCollaborationRequestsReq) Validate() error {
+	return validation.ValidateStruct(
+		&request,
+		validation.Field(&request.UserID, validation.Required),
+	)
+}

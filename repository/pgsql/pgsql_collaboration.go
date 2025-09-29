@@ -388,11 +388,11 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 	// Insert thread collaborator
 	query = `INSERT INTO thread_collaborators
 			(id, thread_id, thread_partner_type_id, user_id, is_active, joined_at, status, 
-				created_at, created_by, updated_at)
-			VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`
+				created_at, created_by, updated_at, thread_partner_application_id)
+			VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`
 	_, err = tx.ExecContext(ctx, query, threadCollaborator.ID, threadCollaborator.ThreadID, threadCollaborator.ThreadPartnerTypeID,
 		threadCollaborator.UserID, threadCollaborator.IsActive, threadCollaborator.JoinedAt, threadCollaborator.Status,
-		threadCollaborator.CreatedAt, threadCollaborator.CreatedBy, threadCollaborator.UpdatedAt)
+		threadCollaborator.CreatedAt, threadCollaborator.CreatedBy, threadCollaborator.UpdatedAt, threadCollaborator.ThreadPartnerApplicationID)
 	if err != nil {
 		return
 	}
@@ -711,6 +711,119 @@ func (r *pgsqlCollaborationRepository) MyThreadCollaborationRequests(ctx context
 			&item.ThreadName,
 			&item.PartnerTypeName,
 			&item.Message,
+			&prof.Name,
+			&prof.NameAlias,
+			&prof.Avatar,
+			&item.CreatedAt,
+		); err != nil {
+			return
+		}
+		item.Profile = prof
+		out = append(out, item)
+	}
+	if err = rows.Err(); err != nil {
+		return
+	}
+
+	res = out
+	err = tx.Commit()
+	return
+}
+
+func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx context.Context, request *request.AcceptedThreadCollaborationRequestsReq) (res []response.AcceptedThreadCollaborationRequestsRes, meta response.MetaRes, err error) {
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// --- pagination ---
+	perPage := request.PerPage
+	if perPage <= 0 {
+		perPage = 10
+	}
+	page := request.Page
+	if page <= 0 {
+		page = 1
+	}
+	meta.Page, meta.PerPage = page, perPage
+	offset := (page - 1) * perPage
+
+	// --- WHERE builder ---
+	wheres := []string{}
+	args := []any{}
+	idx := 1
+
+	// hanya request yang KAMU kirim (initiator)
+	wheres = append(wheres, fmt.Sprintf("taa.initiator_user_id = $%d", idx))
+	args = append(args, request.UserID)
+	idx++
+
+	// status = PENDING
+	wheres = append(wheres, "taa.status = 'PENDING'")
+
+	// aktif saja (hapus jika tidak punya kolom is_active)
+	wheres = append(wheres, "COALESCE(taa.is_active, TRUE)")
+
+	whereSQL := "WHERE " + strings.Join(wheres, " AND ")
+
+	// --- COUNT ---
+	countSQL := `
+		SELECT COUNT(*)
+		FROM thread_partner_applications taa
+		JOIN thread_partner_types tpt ON tpt.id = taa.thread_partner_type_id
+		JOIN threads t               ON t.id  = tpt.thread_id
+		` + whereSQL
+
+	if err = tx.QueryRowContext(ctx, countSQL, args...).Scan(&meta.TotalData); err != nil {
+		return
+	}
+	meta.TotalPages = (meta.TotalData + perPage - 1) / perPage
+
+	// --- DATA ---
+	args = append(args, perPage, offset)
+	limitPos, offsetPos := idx, idx+1
+
+	dataSQL := fmt.Sprintf(`
+		SELECT
+			taa.id                                                 AS id,
+			t.title                                               AS thread_name,
+			pt.name                                               AS partner_type_name,
+			COALESCE(taa.message, '')                             AS message,
+			papp.name                                             AS profile_name,
+			papp.name_alias                                       AS profile_name_alias,
+			papp.avatar                                           AS profile_avatar,
+			COALESCE(taa.updated_at, taa.created_at) AS created_at
+		FROM thread_partner_applications taa
+		JOIN thread_partner_types tpt ON tpt.id     = taa.thread_partner_type_id
+		JOIN partner_types pt        ON pt.id      = tpt.partner_type_id
+		JOIN threads t               ON t.id       = tpt.thread_id
+		LEFT JOIN profiles papp      ON papp.user_id = taa.applicant_user_id   -- profil target/recipient
+		%s
+		ORDER BY COALESCE(taa.updated_at, taa.created_at) DESC
+		LIMIT $%d OFFSET $%d
+	`, whereSQL, limitPos, offsetPos)
+
+	rows, err := tx.QueryContext(ctx, dataSQL, args...)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	out := make([]response.AcceptedThreadCollaborationRequestsRes, 0, perPage)
+	for rows.Next() {
+		var (
+			item response.AcceptedThreadCollaborationRequestsRes
+			prof entity.SimpleProfile
+		)
+		if err = rows.Scan(
+			&item.ThreadName,
+			&item.PartnerTypeName,
 			&prof.Name,
 			&prof.NameAlias,
 			&prof.Avatar,

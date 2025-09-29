@@ -24,6 +24,7 @@ type CollaborationRepository interface {
 		threadCollaborator *entity.ThreadCollaborator, pendingStatus, partnerTypeID string) (err error)
 	MyThreadCollaboration(ctx context.Context, request *request.MyThreadCollaborationReq) ([]response.MyThreadCollaborationRes, response.MetaRes, error)
 	MyThreadCollaborationRequests(ctx context.Context, request *request.MyThreadCollaborationRequestsReq) ([]response.MyThreadCollaborationRequestsRes, response.MetaRes, error)
+	AcceptedThreadCollaborationRequests(ctx context.Context, request *request.AcceptedThreadCollaborationRequestsReq) ([]response.AcceptedThreadCollaborationRequestsRes, response.MetaRes, error)
 }
 
 // CollaborationUsecase represent the collaboration usecase contract
@@ -33,4 +34,5 @@ type CollaborationUsecase interface {
 	ApproveThreadCollaboration(ctx context.Context, request *request.ApproveThreadCollaborationReq) error
 	MyThreadCollaboration(ctx context.Context, request *request.MyThreadCollaborationReq) ([]response.MyThreadCollaborationRes, response.MetaRes, error)
 	MyThreadCollaborationRequests(ctx context.Context, request *request.MyThreadCollaborationRequestsReq) ([]response.MyThreadCollaborationRequestsRes, response.MetaRes, error)
+	AcceptedThreadCollaborationRequests(ctx context.Context, request *request.AcceptedThreadCollaborationRequestsReq) ([]response.AcceptedThreadCollaborationRequestsRes, response.MetaRes, error)
 }

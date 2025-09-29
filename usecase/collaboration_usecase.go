@@ -165,13 +165,14 @@ func (u *CollaborationUsecase) ApproveThreadCollaboration(c context.Context, req
 	}
 
 	threadCollaboratorPayload := &entity.ThreadCollaborator{
-		ID:        uuid.NewString(),
-		Status:    utils.ACTIVE_COLLABORATION_STATUS,
-		JoinedAt:  time.Now().Unix(),
-		IsActive:  true,
-		CreatedAt: time.Now().Unix(),
-		CreatedBy: request.UserID,
-		UpdatedAt: time.Now().Unix(),
+		ID:                         uuid.NewString(),
+		ThreadPartnerApplicationID: request.ApplicationCollaborationID,
+		Status:                     utils.ACTIVE_COLLABORATION_STATUS,
+		JoinedAt:                   time.Now().Unix(),
+		IsActive:                   true,
+		CreatedAt:                  time.Now().Unix(),
+		CreatedBy:                  request.UserID,
+		UpdatedAt:                  time.Now().Unix(),
 	}
 
 	// Payload Applicant Notification
@@ -232,6 +233,28 @@ func (u *CollaborationUsecase) MyThreadCollaborationRequests(c context.Context, 
 	defer cancel()
 
 	res, meta, err = u.collaborationRepo.MyThreadCollaborationRequests(ctx, request)
+	if err != nil {
+		return
+	}
+
+	// Map response
+	if len(res) > 0 {
+		for i, item := range res {
+			res[i].Profile.Avatar, err = u.s3Repo.GetPresignedURL(c, config.LoadConfig().S3Bucket, item.Profile.Avatar, false, time.Duration(24*time.Hour))
+			if err != nil {
+				return res, meta, err
+			}
+		}
+	}
+
+	return
+}
+
+func (u *CollaborationUsecase) AcceptedThreadCollaborationRequests(c context.Context, request *request.AcceptedThreadCollaborationRequestsReq) (res []response.AcceptedThreadCollaborationRequestsRes, meta response.MetaRes, err error) {
+	ctx, cancel := context.WithTimeout(c, u.ctxTimeout)
+	defer cancel()
+
+	res, meta, err = u.collaborationRepo.AcceptedThreadCollaborationRequests(ctx, request)
 	if err != nil {
 		return
 	}

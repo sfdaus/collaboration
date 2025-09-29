@@ -32,3 +32,12 @@ type MyThreadCollaborationRequestsRes struct {
 	Profile         entity.SimpleProfile `json:"profile"`
 	CreatedAt       int64                `json:"created_at"`
 }
+
+// Accepted Thread Collaboration Requests Response
+type AcceptedThreadCollaborationRequestsRes struct {
+	ThreadID        string               `json:"thread_id"`
+	ThreadName      string               `json:"thread_name"`
+	PartnerTypeName string               `json:"partner_type_name"`
+	Profile         entity.SimpleProfile `json:"profile"`
+	CreatedAt       int64                `json:"created_at"`
+}
