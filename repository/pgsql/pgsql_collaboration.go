@@ -96,6 +96,24 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 		return res, initID, utils.NewBadRequestError("Capacity for this role is full")
 	}
 
+	// Pengecekan kalau dia sudah mendaftar pada projek atau thread tersebut
+	var tAppID, tAppStatus string
+	tApplication := `SELECT tpa.id, tpa.status
+				  FROM thread_partner_applications tpa
+				  WHERE tpa.thread_id = $1 AND tpa.applicant_user_id = $2
+				  ORDER BY COALESCE(tpa.updated_at, tpa.created_at) DESC
+				  LIMIT 1
+				  FOR SHARE`
+
+	if err = tx.QueryRowContext(ctx, tApplication, threadCollabApplicationPayload.ThreadID, threadCollabApplicationPayload.ApplicantUserID).
+		Scan(&tAppID, &tAppStatus); err != nil {
+		return
+	}
+
+	if tAppStatus == utils.PENDING_APPLICATION_STATUS || tAppStatus == utils.ACCEPTED_APPLICATION_STATUS {
+		return res, initID, utils.NewBadRequestError("Your are already applying for this project or thread")
+	}
+
 	// 3) Insert thread application
 	qInsert := `INSERT INTO thread_partner_applications
 					(id, thread_id, thread_partner_type_id, applicant_user_id, initiator_user_id,
@@ -759,15 +777,15 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 	args := []any{}
 	idx := 1
 
-	// hanya request yang KAMU kirim (initiator)
+	// hanya request yang KAMU inisiasi
 	wheres = append(wheres, fmt.Sprintf("taa.initiator_user_id = $%d", idx))
 	args = append(args, request.UserID)
 	idx++
 
-	// status = PENDING
-	wheres = append(wheres, "taa.status = 'PENDING'")
+	// hanya yang sudah diterima
+	wheres = append(wheres, "taa.status = 'ACCEPTED'")
 
-	// aktif saja (hapus jika tidak punya kolom is_active)
+	// aktif (hapus jika kolom ini tidak ada)
 	wheres = append(wheres, "COALESCE(taa.is_active, TRUE)")
 
 	whereSQL := "WHERE " + strings.Join(wheres, " AND ")
@@ -777,7 +795,7 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 		SELECT COUNT(*)
 		FROM thread_partner_applications taa
 		JOIN thread_partner_types tpt ON tpt.id = taa.thread_partner_type_id
-		JOIN threads t               ON t.id  = tpt.thread_id
+		JOIN threads t               ON t.id  = taa.thread_id
 		` + whereSQL
 
 	if err = tx.QueryRowContext(ctx, countSQL, args...).Scan(&meta.TotalData); err != nil {
@@ -791,19 +809,19 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 
 	dataSQL := fmt.Sprintf(`
 		SELECT
-			taa.id                                                 AS id,
-			t.title                                               AS thread_name,
-			pt.name                                               AS partner_type_name,
-			COALESCE(taa.message, '')                             AS message,
-			papp.name                                             AS profile_name,
-			papp.name_alias                                       AS profile_name_alias,
-			papp.avatar                                           AS profile_avatar,
-			COALESCE(taa.updated_at, taa.created_at) AS created_at
+			taa.thread_id                                        AS thread_id,
+			t.title                                              AS thread_name,
+			pt.name                                              AS partner_type_name,
+			taa.id                                               AS application_id,
+			papp.name                                            AS profile_name,
+			papp.name_alias                                      AS profile_name_alias,
+			papp.avatar                                          AS profile_avatar,
+			COALESCE(taa.updated_at, taa.created_at)             AS created_at
 		FROM thread_partner_applications taa
-		JOIN thread_partner_types tpt ON tpt.id     = taa.thread_partner_type_id
-		JOIN partner_types pt        ON pt.id      = tpt.partner_type_id
-		JOIN threads t               ON t.id       = tpt.thread_id
-		LEFT JOIN profiles papp      ON papp.user_id = taa.applicant_user_id   -- profil target/recipient
+		JOIN thread_partner_types tpt ON tpt.id   = taa.thread_partner_type_id
+		JOIN partner_types pt        ON pt.id    = tpt.partner_type_id
+		JOIN threads t               ON t.id     = taa.thread_id
+		LEFT JOIN profiles papp      ON papp.user_id = taa.initiator_user_id
 		%s
 		ORDER BY COALESCE(taa.updated_at, taa.created_at) DESC
 		LIMIT $%d OFFSET $%d
@@ -822,8 +840,10 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 			prof entity.SimpleProfile
 		)
 		if err = rows.Scan(
+			&item.ThreadID,
 			&item.ThreadName,
 			&item.PartnerTypeName,
+			&item.ApplicationID,
 			&prof.Name,
 			&prof.NameAlias,
 			&prof.Avatar,
@@ -840,5 +860,101 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 
 	res = out
 	err = tx.Commit()
+	return
+}
+
+func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Context, request *request.CancelThreadCollaborationReq, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
+	threadCollaboratorPayload *entity.ThreadCollaborator) (err error) {
+
+	// Mulai transaction
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	// Pastikan rollback kalau ada error
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Check user relation to app id
+	var userQ, threadID, threadPartnerTypeID, applicationStatus string
+	if request.UserRelation == utils.THREAD_COLLABORATOR {
+		userQ = "applicant_user_id"
+	} else {
+		userQ = "initiator_user_id"
+	}
+
+	// Checker collaboration application
+	qThreadApp := fmt.Sprintf(`SELECT thread_id, thread_partner_type_id, status
+				  FROM thread_partner_applications
+				  WHERE is_active = true AND %s = $1 AND id = $2 AND status IN ($3, $4)
+				  FOR SHARE`, userQ)
+
+	if err = tx.QueryRowContext(ctx, qThreadApp, request.UserID, threadCollabApplicationPayload.ID, utils.ACCEPTED_APPLICATION_STATUS,
+		utils.PENDING_APPLICATION_STATUS).Scan(&threadID, &threadPartnerTypeID, &applicationStatus); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return utils.NewNotFoundError("Thread collaboration application not found")
+		}
+		return
+	}
+
+	// Update application status + cek RowsAffected()
+	query := fmt.Sprintf(`UPDATE thread_partner_applications
+				SET status = $1,
+					updated_at = $2,
+					updated_by = $3,
+					cancel_reason = $4
+				WHERE id = $5 AND is_active = true AND %s = $6`, userQ)
+
+	res, err := tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
+		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.CancelReason, threadCollabApplicationPayload.ID, request.UserID)
+
+	if err != nil {
+		return
+	}
+
+	if n, _ := res.RowsAffected(); n == 0 {
+		err = utils.NewNotFoundError("Application not found or already processed")
+		return
+	}
+
+	if applicationStatus == utils.ACCEPTED_APPLICATION_STATUS {
+		// Update thread collaborator status + cek RowsAffected()
+		query = `UPDATE thread_collaborators
+				SET status = $1,
+					updated_at = $2,
+					updated_by = $3,
+					left_at = $4
+				WHERE thread_partner_application_id = $5 AND is_active = true`
+
+		res, err = tx.ExecContext(ctx, query, threadCollaboratorPayload.Status, threadCollaboratorPayload.UpdatedAt,
+			threadCollaboratorPayload.UpdatedBy, threadCollaboratorPayload.LeftAt, request.ApplicationCollaborationID)
+
+		if err != nil {
+			return
+		}
+
+		if n, _ := res.RowsAffected(); n == 0 {
+			err = utils.NewNotFoundError("Thread Collaborator not found or already processed")
+			return
+		}
+
+		// Revert amount fulfilled
+		qPartnerType := `UPDATE thread_partner_types
+					SET amount_fulfilled = amount_fulfilled - 1
+					WHERE id = $1 AND is_active = true`
+
+		if _, err = tx.ExecContext(ctx, qPartnerType, threadPartnerTypeID); err != nil {
+			return
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return
+	}
+
 	return
 }
