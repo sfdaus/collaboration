@@ -759,15 +759,15 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 	args := []any{}
 	idx := 1
 
-	// hanya request yang KAMU kirim (initiator)
+	// hanya request yang KAMU inisiasi
 	wheres = append(wheres, fmt.Sprintf("taa.initiator_user_id = $%d", idx))
 	args = append(args, request.UserID)
 	idx++
 
-	// status = PENDING
-	wheres = append(wheres, "taa.status = 'PENDING'")
+	// hanya yang sudah diterima
+	wheres = append(wheres, "taa.status = 'ACCEPTED'")
 
-	// aktif saja (hapus jika tidak punya kolom is_active)
+	// aktif (hapus jika kolom ini tidak ada)
 	wheres = append(wheres, "COALESCE(taa.is_active, TRUE)")
 
 	whereSQL := "WHERE " + strings.Join(wheres, " AND ")
@@ -777,7 +777,7 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 		SELECT COUNT(*)
 		FROM thread_partner_applications taa
 		JOIN thread_partner_types tpt ON tpt.id = taa.thread_partner_type_id
-		JOIN threads t               ON t.id  = tpt.thread_id
+		JOIN threads t               ON t.id  = taa.thread_id
 		` + whereSQL
 
 	if err = tx.QueryRowContext(ctx, countSQL, args...).Scan(&meta.TotalData); err != nil {
@@ -791,19 +791,19 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 
 	dataSQL := fmt.Sprintf(`
 		SELECT
-			taa.id                                                 AS id,
-			t.title                                               AS thread_name,
-			pt.name                                               AS partner_type_name,
-			COALESCE(taa.message, '')                             AS message,
-			papp.name                                             AS profile_name,
-			papp.name_alias                                       AS profile_name_alias,
-			papp.avatar                                           AS profile_avatar,
-			COALESCE(taa.updated_at, taa.created_at) AS created_at
+			taa.thread_id                                        AS thread_id,
+			t.title                                              AS thread_name,
+			pt.name                                              AS partner_type_name,
+			taa.id                                               AS application_id,
+			papp.name                                            AS profile_name,
+			papp.name_alias                                      AS profile_name_alias,
+			papp.avatar                                          AS profile_avatar,
+			COALESCE(taa.updated_at, taa.created_at)             AS created_at
 		FROM thread_partner_applications taa
-		JOIN thread_partner_types tpt ON tpt.id     = taa.thread_partner_type_id
-		JOIN partner_types pt        ON pt.id      = tpt.partner_type_id
-		JOIN threads t               ON t.id       = tpt.thread_id
-		LEFT JOIN profiles papp      ON papp.user_id = taa.applicant_user_id   -- profil target/recipient
+		JOIN thread_partner_types tpt ON tpt.id   = taa.thread_partner_type_id
+		JOIN partner_types pt        ON pt.id    = tpt.partner_type_id
+		JOIN threads t               ON t.id     = taa.thread_id
+		LEFT JOIN profiles papp      ON papp.user_id = taa.initiator_user_id
 		%s
 		ORDER BY COALESCE(taa.updated_at, taa.created_at) DESC
 		LIMIT $%d OFFSET $%d
@@ -822,8 +822,10 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 			prof entity.SimpleProfile
 		)
 		if err = rows.Scan(
+			&item.ThreadID,
 			&item.ThreadName,
 			&item.PartnerTypeName,
+			&item.ApplicationID,
 			&prof.Name,
 			&prof.NameAlias,
 			&prof.Avatar,
