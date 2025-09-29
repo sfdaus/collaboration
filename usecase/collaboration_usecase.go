@@ -280,10 +280,11 @@ func (u *CollaborationUsecase) CancelThreadCollaboration(c context.Context, requ
 	var threadCollaboratorPayload entity.ThreadCollaborator
 
 	threadCollabApplicationPayload = entity.ThreadPartnerApplication{
-		ID:        request.ApplicationCollaborationID,
-		Status:    utils.CANCELLED_APPLICATION_STATUS,
-		UpdatedAt: time.Now().Unix(),
-		UpdatedBy: request.UserID,
+		ID:           request.ApplicationCollaborationID,
+		Status:       utils.CANCELLED_APPLICATION_STATUS,
+		CancelReason: request.Message,
+		UpdatedAt:    time.Now().Unix(),
+		UpdatedBy:    request.UserID,
 	}
 
 	threadCollaboratorPayload = entity.ThreadCollaborator{

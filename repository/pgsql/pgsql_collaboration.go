@@ -905,11 +905,12 @@ func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Con
 	query := `UPDATE thread_partner_applications
 				SET status = $1,
 					updated_at = $2,
-					updated_by = $3
-				WHERE id = $4 AND is_active = true`
+					updated_by = $3,
+					cancel_reason = $4
+				WHERE id = $5 AND is_active = true`
 
 	res, err := tx.ExecContext(ctx, query, threadCollabApplicationPayload.Status, threadCollabApplicationPayload.UpdatedAt,
-		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.ID)
+		threadCollabApplicationPayload.UpdatedBy, threadCollabApplicationPayload.CancelReason, threadCollabApplicationPayload.ID)
 
 	if err != nil {
 		return

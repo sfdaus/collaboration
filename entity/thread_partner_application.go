@@ -11,6 +11,7 @@ type ThreadPartnerApplication struct {
 	RejectReason        string  `json:"reject_reason"`
 	Status              string  `json:"status"`
 	IsActive            bool    `json:"is_active"`
+	CancelReason        string  `json:"cancel_reason"`
 	CreatedAt           int64   `json:"created_at"`
 	CreatedBy           string  `json:"created_by"`
 	UpdatedAt           int64   `json:"updated_at"`
