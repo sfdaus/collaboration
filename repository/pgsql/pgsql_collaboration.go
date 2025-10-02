@@ -663,12 +663,14 @@ func (r *pgsqlCollaborationRepository) MyThreadCollaborationRequests(ctx context
 	idx := 1
 
 	// hanya request yang KAMU kirim (initiator)
-	wheres = append(wheres, fmt.Sprintf("taa.initiator_user_id = $%d", idx))
-	args = append(args, request.UserID)
-	idx++
+	wheres = append(wheres, fmt.Sprintf("taa.initiator_user_id = '%s'", request.UserID))
 
 	// status = PENDING
-	wheres = append(wheres, "taa.status = 'PENDING'")
+	if s := strings.TrimSpace(request.Status); s != "" {
+		wheres = append(wheres, fmt.Sprintf("taa.status = $%d", idx))
+		args = append(args, s)
+		idx++
+	}
 
 	// aktif saja (hapus jika tidak punya kolom is_active)
 	wheres = append(wheres, "COALESCE(taa.is_active, TRUE)")
@@ -694,7 +696,8 @@ func (r *pgsqlCollaborationRepository) MyThreadCollaborationRequests(ctx context
 
 	dataSQL := fmt.Sprintf(`
 		SELECT
-			taa.id                                                 AS id,
+			taa.id                                                 AS application_id,
+			taa.thread_id                                        AS thread_id,
 			t.title                                               AS thread_name,
 			pt.name                                               AS partner_type_name,
 			COALESCE(taa.message, '')                             AS message,
@@ -725,7 +728,8 @@ func (r *pgsqlCollaborationRepository) MyThreadCollaborationRequests(ctx context
 			prof entity.SimpleProfile
 		)
 		if err = rows.Scan(
-			&item.ID,
+			&item.ApplicationID,
+			&item.ThreadID,
 			&item.ThreadName,
 			&item.PartnerTypeName,
 			&item.Message,

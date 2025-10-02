@@ -70,8 +70,9 @@ func (request MyThreadCollaborationReq) Validate() error {
 
 // My Thread Collaboration Requests request body
 type MyThreadCollaborationRequestsReq struct {
-	PerPage int64 `query:"per_page"`
-	Page    int64 `query:"page"`
+	PerPage int64  `query:"per_page"`
+	Page    int64  `query:"page"`
+	Status  string `query:"status"`
 	UserID  string
 }
 
@@ -79,6 +80,9 @@ func (request MyThreadCollaborationRequestsReq) Validate() error {
 	return validation.ValidateStruct(
 		&request,
 		validation.Field(&request.UserID, validation.Required),
+		validation.Field(&request.Status,
+			validation.In("PENDING", "ACCEPTED", "REJECTED"),
+		),
 	)
 }
 
