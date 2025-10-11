@@ -97,7 +97,7 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 	}
 
 	// Pengecekan kalau dia sudah mendaftar pada projek atau thread tersebut
-	var tAppID, tAppStatus string
+	var tAppID, tAppStatus sql.NullString
 	tApplication := `SELECT tpa.id, tpa.status
 				  FROM thread_partner_applications tpa
 				  WHERE tpa.thread_id = $1 AND tpa.applicant_user_id = $2
@@ -105,13 +105,18 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 				  LIMIT 1
 				  FOR SHARE`
 
-	if err = tx.QueryRowContext(ctx, tApplication, threadCollabApplicationPayload.ThreadID, threadCollabApplicationPayload.ApplicantUserID).
-		Scan(&tAppID, &tAppStatus); err != nil {
-		return
-	}
+	err = tx.QueryRowContext(ctx, tApplication, threadCollabApplicationPayload.ThreadID, threadCollabApplicationPayload.ApplicantUserID).
+		Scan(&tAppID, &tAppStatus)
 
-	if tAppStatus == utils.PENDING_APPLICATION_STATUS || tAppStatus == utils.ACCEPTED_APPLICATION_STATUS {
-		return res, initID, utils.NewBadRequestError("Your are already applying for this project or thread")
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return res, initID, err
+		}
+
+	} else {
+		if tAppStatus.Valid && (tAppStatus.String == utils.PENDING_APPLICATION_STATUS || tAppStatus.String == utils.ACCEPTED_APPLICATION_STATUS) {
+			return res, initID, utils.NewBadRequestError("Your are already applying for this project or thread")
+		}
 	}
 
 	// 3) Insert thread application
@@ -157,6 +162,7 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 							VALUES
 								($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',0,NOW(),$11,$12,$13)
 						`
+
 	if _, err = tx.ExecContext(ctx, qInitNotifOutbox,
 		initiatorNotificationOutbox.ID, initiatorNotificationOutbox.UserID, initiatorNotificationOutbox.Type, initiatorNotificationOutbox.ReferenceType,
 		initiatorNotificationOutbox.ReferenceID, initiatorNotificationOutbox.HeadersJSON, initiatorNotificationOutbox.Title, initiatorNotificationOutbox.Message,
@@ -180,6 +186,7 @@ func (r *pgsqlCollaborationRepository) ThreadCollaborationApply(ctx context.Cont
 							VALUES
 								($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',0,NOW(),$11,$12,$13)
 						`
+
 	if _, err = tx.ExecContext(ctx, qCollabNotifOutbox,
 		collabNotificationOutbox.ID, collabNotificationOutbox.UserID, collabNotificationOutbox.Type, collabNotificationOutbox.ReferenceType,
 		collabNotificationOutbox.ReferenceID, collabNotificationOutbox.HeadersJSON, collabNotificationOutbox.Title, collabNotificationOutbox.Message,
