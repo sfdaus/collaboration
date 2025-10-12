@@ -65,6 +65,8 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 	headers := map[string]string{"x-user-id": request.UserID}
 	headersJSON, _ := json.Marshal(headers)
 
+	actionURL := config.LoadConfig().BaseURLPrakarsa + utils.THREAD_COLLAB_APPLICATION_NOTIFICATION_ACTION_URL + request.ThreadID
+
 	initiatorNotificationOutboxPayload = &entity.NotificationOutboxInsert{
 		ID:            uuid.NewString(),
 		Type:          utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE,
@@ -77,6 +79,7 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 			"%s:%s:%s", utils.NotificationIdempotencyKey[utils.THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE],
 			threadCollabApplicationPayload.ID, "[INIT_ID]",
 		),
+		ActionURL: &actionURL,
 		CreatedAt: time.Now().Unix(),
 		UpdatedAt: time.Now().Unix(),
 	}
@@ -94,6 +97,7 @@ func (u *CollaborationUsecase) ThreadCollaborationApply(c context.Context, reque
 			"%s:%s:%s", utils.NotificationIdempotencyKey[utils.THREAD_SELF_APPLICATION_NOTIFICATION_TYPE],
 			threadCollabApplicationPayload.ID, request.UserID,
 		),
+		ActionURL: &actionURL,
 		CreatedAt: time.Now().Unix(),
 		UpdatedAt: time.Now().Unix(),
 	}
@@ -127,6 +131,8 @@ func (u *CollaborationUsecase) RejectThreadCollaboration(c context.Context, requ
 	headers := map[string]string{"x-user-id": request.UserID}
 	headersJSON, _ := json.Marshal(headers)
 
+	actionURL := config.LoadConfig().BaseURLPrakarsa + utils.THREAD_COLLAB_APPLICATION_NOTIFICATION_ACTION_URL
+
 	applicantNotificationOutboxPayload = &entity.NotificationOutboxInsert{
 		ID:            uuid.NewString(),
 		Type:          utils.THREAD_APPLICATION_REJECT_NOTIFICATION,
@@ -139,6 +145,7 @@ func (u *CollaborationUsecase) RejectThreadCollaboration(c context.Context, requ
 			"%s:%s:%s", utils.NotificationIdempotencyKey[utils.THREAD_APPLICATION_REJECT_NOTIFICATION],
 			threadCollabApplicationPayload.ID, "[APPLICANT_ID]",
 		),
+		ActionURL: &actionURL,
 		CreatedAt: time.Now().Unix(),
 		UpdatedAt: time.Now().Unix(),
 	}
@@ -181,6 +188,8 @@ func (u *CollaborationUsecase) ApproveThreadCollaboration(c context.Context, req
 	headers := map[string]string{"x-user-id": request.UserID}
 	headersJSON, _ := json.Marshal(headers)
 
+	actionURL := config.LoadConfig().BaseURLPrakarsa + utils.THREAD_COLLAB_APPLICATION_NOTIFICATION_ACTION_URL
+
 	applicantNotificationOutboxPayload = &entity.NotificationOutboxInsert{
 		ID:            uuid.NewString(),
 		Type:          utils.THREAD_APPLICATION_APPROVE_NOTIFICATION,
@@ -193,6 +202,7 @@ func (u *CollaborationUsecase) ApproveThreadCollaboration(c context.Context, req
 			"%s:%s:%s", utils.NotificationIdempotencyKey[utils.THREAD_APPLICATION_APPROVE_NOTIFICATION],
 			threadCollabApplicationPayload.ID, "[APPLICANT_ID]",
 		),
+		ActionURL: &actionURL,
 		CreatedAt: time.Now().Unix(),
 		UpdatedAt: time.Now().Unix(),
 	}

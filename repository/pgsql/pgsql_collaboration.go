@@ -282,6 +282,8 @@ func (r *pgsqlCollaborationRepository) RejectThreadCollaboration(ctx context.Con
 	applicantNotificationOutbox.Title = newTitle
 
 	applicantNotificationOutbox.IdempotencyKey = strings.Replace(applicantNotificationOutbox.IdempotencyKey, "[APPLICANT_ID]", applicantID, 1)
+	newActionURL := fmt.Sprintf("%s%s", applicantNotificationOutbox.ActionURL, threadID)
+	applicantNotificationOutbox.ActionURL = &newActionURL
 
 	qCollabNotifOutbox := `
 						 INSERT INTO notification_outbox
@@ -438,7 +440,9 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 	applicantNotificationOutbox.Title = newTitle
 
 	applicantNotificationOutbox.IdempotencyKey = strings.Replace(applicantNotificationOutbox.IdempotencyKey, "[APPLICANT_ID]", applicantID, 1)
-
+	newActionURL := fmt.Sprintf("%s%s", applicantNotificationOutbox.ActionURL, threadID)
+	applicantNotificationOutbox.ActionURL = &newActionURL
+	
 	qCollabNotifOutbox := `
 						 INSERT INTO notification_outbox
 								(id, user_id, type, reference_type, reference_id, headers_json,

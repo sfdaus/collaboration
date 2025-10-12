@@ -25,6 +25,9 @@ const (
 	// User Collaboration Relation
 	THREAD_INITIATOR    = "INITIATOR"
 	THREAD_COLLABORATOR = "COLLABORATOR"
+
+	// Action URL Notification Constant
+	THREAD_COLLAB_APPLICATION_NOTIFICATION_ACTION_URL = "/thread/"
 )
 
 type ResponseStatus struct {
