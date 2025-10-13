@@ -311,7 +311,32 @@ func (u *CollaborationUsecase) CancelThreadCollaboration(c context.Context, requ
 		threadCollaboratorPayload.Status = utils.LEFT_COLLABORATION_STATUS
 	}
 
-	err = u.collaborationRepo.CancelThreadCollaboration(ctx, request, &threadCollabApplicationPayload, &threadCollaboratorPayload)
+	// Payload Remove Notification
+	var removeNotificationOutboxPayload *entity.NotificationOutboxInsert
+	headers := map[string]string{"x-user-id": request.UserID}
+	headersJSON, _ := json.Marshal(headers)
+
+	actionURL := config.LoadConfig().BaseURLPrakarsa + utils.THREAD_COLLAB_APPLICATION_NOTIFICATION_ACTION_URL
+
+	removeNotificationOutboxPayload = &entity.NotificationOutboxInsert{
+		ID:            uuid.NewString(),
+		Type:          utils.THREAD_COLLABORATION_REMOVED_NOTIFICATION,
+		ReferenceType: utils.THREAD_COLLABORATION_NOTIFICATION_REFERENCE_TYPE,
+		ReferenceID:   threadCollabApplicationPayload.ID,
+		Message:       request.Message,
+		Priority:      utils.CollaborationNotificationPriority[utils.THREAD_COLLABORATION_REMOVED_NOTIFICATION],
+		IdempotencyKey: fmt.Sprintf(
+			"%s:%s:%s", utils.NotificationIdempotencyKey[utils.THREAD_COLLABORATION_REMOVED_NOTIFICATION],
+			request.UserID, request.ApplicationCollaborationID,
+		),
+		HeadersJSON: headersJSON,
+		ActionURL:   &actionURL,
+		CreatedAt:   time.Now().Unix(),
+		UpdatedAt:   time.Now().Unix(),
+	}
+
+	err = u.collaborationRepo.CancelThreadCollaboration(ctx, request, &threadCollabApplicationPayload,
+		&threadCollaboratorPayload, removeNotificationOutboxPayload)
 	if err != nil {
 		return
 	}

@@ -26,7 +26,7 @@ type CollaborationRepository interface {
 	MyThreadCollaborationRequests(ctx context.Context, request *request.MyThreadCollaborationRequestsReq) ([]response.MyThreadCollaborationRequestsRes, response.MetaRes, error)
 	AcceptedThreadCollaborationRequests(ctx context.Context, request *request.AcceptedThreadCollaborationRequestsReq) ([]response.AcceptedThreadCollaborationRequestsRes, response.MetaRes, error)
 	CancelThreadCollaboration(ctx context.Context, request *request.CancelThreadCollaborationReq, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
-		threadCollaboratorPayload *entity.ThreadCollaborator) error
+		threadCollaboratorPayload *entity.ThreadCollaborator, removeNotificationOutboxPayload *entity.NotificationOutboxInsert) error
 }
 
 // CollaborationUsecase represent the collaboration usecase contract

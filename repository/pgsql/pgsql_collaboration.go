@@ -442,7 +442,7 @@ func (r *pgsqlCollaborationRepository) ApproveThreadCollaboration(ctx context.Co
 	applicantNotificationOutbox.IdempotencyKey = strings.Replace(applicantNotificationOutbox.IdempotencyKey, "[APPLICANT_ID]", applicantID, 1)
 	newActionURL := fmt.Sprintf("%s%s", applicantNotificationOutbox.ActionURL, threadID)
 	applicantNotificationOutbox.ActionURL = &newActionURL
-	
+
 	qCollabNotifOutbox := `
 						 INSERT INTO notification_outbox
 								(id, user_id, type, reference_type, reference_id, headers_json,
@@ -879,7 +879,7 @@ func (r *pgsqlCollaborationRepository) AcceptedThreadCollaborationRequests(ctx c
 }
 
 func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Context, request *request.CancelThreadCollaborationReq, threadCollabApplicationPayload *entity.ThreadPartnerApplication,
-	threadCollaboratorPayload *entity.ThreadCollaborator) (err error) {
+	threadCollaboratorPayload *entity.ThreadCollaborator, removeNotificationOutboxPayload *entity.NotificationOutboxInsert) (err error) {
 
 	// Mulai transaction
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -895,21 +895,24 @@ func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Con
 	}()
 
 	// Check user relation to app id
-	var userQ, threadID, threadPartnerTypeID, applicationStatus string
+	var userQ, threadID, threadPartnerTypeID, applicationStatus, threadTitle, userIDQ, userID string
 	if request.UserRelation == utils.THREAD_COLLABORATOR {
 		userQ = "applicant_user_id"
+		userIDQ = "initiator_user_id"
 	} else {
 		userQ = "initiator_user_id"
+		userIDQ = "applicant_user_id"
 	}
 
 	// Checker collaboration application
-	qThreadApp := fmt.Sprintf(`SELECT thread_id, thread_partner_type_id, status
-				  FROM thread_partner_applications
-				  WHERE is_active = true AND %s = $1 AND id = $2 AND status IN ($3, $4)
-				  FOR SHARE`, userQ)
+	qThreadApp := fmt.Sprintf(`SELECT tpa.thread_id, tpa.thread_partner_type_id, tpa.status, t.title, %s as user_id
+				  FROM thread_partner_applications tpa
+				  JOIN threads t on t.id = tpa.thread_id
+				  WHERE tpa.is_active = true AND %s = $1 AND tpa.id = $2 AND tpa.status IN ($3, $4)
+				  FOR SHARE`, userIDQ, userQ)
 
 	if err = tx.QueryRowContext(ctx, qThreadApp, request.UserID, threadCollabApplicationPayload.ID, utils.ACCEPTED_APPLICATION_STATUS,
-		utils.PENDING_APPLICATION_STATUS).Scan(&threadID, &threadPartnerTypeID, &applicationStatus); err != nil {
+		utils.PENDING_APPLICATION_STATUS).Scan(&threadID, &threadPartnerTypeID, &applicationStatus, &threadTitle, &userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return utils.NewNotFoundError("Thread collaboration application not found")
 		}
@@ -965,6 +968,33 @@ func (r *pgsqlCollaborationRepository) CancelThreadCollaboration(ctx context.Con
 		if _, err = tx.ExecContext(ctx, qPartnerType, threadPartnerTypeID); err != nil {
 			return
 		}
+	}
+
+	// Send notification removal to outbox
+	removeNotificationOutboxPayload.Title = strings.Replace(utils.CollaborationNotificationTitle["THREAD_COLLAB_REMOVED_TITLE"],
+		"<thread_title>", threadTitle, 1)
+	removeNotificationOutboxPayload.UserID = userID
+
+	actionURL := fmt.Sprintf("%s%s", *removeNotificationOutboxPayload.ActionURL, threadID)
+	removeNotificationOutboxPayload.ActionURL = &actionURL
+
+	qCollabNotifOutbox := `
+						 INSERT INTO notification_outbox
+								(id, user_id, type, reference_type, reference_id, headers_json,
+								 title, message, action_url, priority, status, attempt_count,
+								 next_attempt_at, idempotency_key, created_at, updated_at)
+							VALUES
+								($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',0,NOW(),$11,$12,$13)
+						`
+
+	if _, err = tx.ExecContext(ctx, qCollabNotifOutbox,
+		removeNotificationOutboxPayload.ID, removeNotificationOutboxPayload.UserID, removeNotificationOutboxPayload.Type, removeNotificationOutboxPayload.ReferenceType,
+		removeNotificationOutboxPayload.ReferenceID, removeNotificationOutboxPayload.HeadersJSON, removeNotificationOutboxPayload.Title, removeNotificationOutboxPayload.Message,
+		removeNotificationOutboxPayload.ActionURL, removeNotificationOutboxPayload.Priority, removeNotificationOutboxPayload.IdempotencyKey, removeNotificationOutboxPayload.CreatedAt,
+		removeNotificationOutboxPayload.UpdatedAt,
+	); err != nil {
+		// idempotency_key UNIQUE akan trigger duplicate error kalau kejadian enqueue ganda
+		return
 	}
 
 	if err = tx.Commit(); err != nil {

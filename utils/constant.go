@@ -18,9 +18,11 @@ const (
 	THREAD_INITIATOR_APPLICATION_NOTIFICATION_TYPE = "THREAD_COLLAB_APPLICATION_INITIATOR"
 	THREAD_APPLICATION_REJECT_NOTIFICATION         = "THREAD_COLLAB_REJECTED"
 	THREAD_APPLICATION_APPROVE_NOTIFICATION        = "THREAD_COLLAB_APPROVED"
+	THREAD_COLLABORATION_REMOVED_NOTIFICATION      = "THREAD_COLLAB_REMOVED"
 
 	// Notification Reference Type
-	THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE = "THREAD_APPLICATION"
+	THREAD_APPLICATION_NOTIFICATION_REFERENCE_TYPE   = "THREAD_APPLICATION"
+	THREAD_COLLABORATION_NOTIFICATION_REFERENCE_TYPE = "THREAD_COLLABORATION"
 
 	// User Collaboration Relation
 	THREAD_INITIATOR    = "INITIATOR"
@@ -48,6 +50,10 @@ var CollaborationInitiatorNotificationTitle = map[string]string{
 	"APPLICATION_APPROVED_TITLE": `menerima ajakan kolaborasi kamu untuk proyek "<thread_title>"`,
 }
 
+var CollaborationNotificationTitle = map[string]string{
+	"THREAD_COLLAB_REMOVED_TITLE": `membatalkan ajakan kolaborasi kamu untuk proyek "<thread_title>"`,
+}
+
 var CollaborationInitiatorNotificationMessage = map[string]string{
 	"THREAD_APPLICATION_APPROVAL_MESSAGE": `Aplikasi yang kamu ajukan diterima!`,
 }
@@ -67,11 +73,13 @@ var CollaborationNotificationPriority = map[string]string{
 	"THREAD_COLLAB_APPLICATION_INITIATOR": "high",
 	"THREAD_COLLAB_REJECTED":              "high",
 	"THREAD_COLLAB_APPROVED":              "high",
+	"THREAD_COLLAB_REMOVED":               "high",
 }
 
 var NotificationIdempotencyKey = map[string]string{
 	"THREAD_COLLAB_APPLICATION_SELF":      "notif:thread_apply:collab",
 	"THREAD_COLLAB_APPLICATION_INITIATOR": "notif:thread_apply:init",
-	"THREAD_COLLAB_REJECTED":              "notif:thread_reject",
-	"THREAD_COLLAB_APPROVED":              "notif:thread_approve",
+	"THREAD_COLLAB_REJECTED":              "notif:thread_collab_reject",
+	"THREAD_COLLAB_APPROVED":              "notif:thread_collab_approve",
+	"THREAD_COLLAB_REMOVED":               "notif:thread_collab_remove",
 }
